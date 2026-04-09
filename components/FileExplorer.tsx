@@ -228,7 +228,9 @@ export function FileExplorer() {
            <AiPanel 
               isOpen={isAiOpen} 
               onClose={() => setIsAiOpen(false)} 
-              onNavigate={(path, highlight) => handleNavigateTo(path, highlight)} 
+              onNavigate={(path, highlight) => handleNavigateTo(path, highlight)}
+              onRefresh={refresh}
+              currentPath={currentPath}
            />
         </div>
 

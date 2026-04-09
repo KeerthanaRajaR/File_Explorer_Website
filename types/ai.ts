@@ -12,3 +12,25 @@ export type FileMeta = {
 export type StoredFileMeta = Omit<FileMeta, 'createdAt'> & {
   createdAt: string;
 };
+
+export type ToolAction =
+  | 'delete_files'
+  | 'move_files'
+  | 'rename_file'
+  | 'create_folder'
+  | 'create_file'
+  | 'view_file'
+  | 'preview_image'
+  | 'download_file'
+  | 'edit_file_content';
+
+export type ActionPayload = {
+  type: ToolAction;
+  targets: string[];
+  destination?: string;
+  newName?: string;
+  fileContent?: string;
+  replaceFrom?: string;
+  replaceTo?: string;
+  requiresConfirmation: boolean;
+};

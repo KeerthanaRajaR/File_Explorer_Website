@@ -13,4 +13,4 @@ export interface StorageInfo {
   quota: number; // in bytes
 }
 
-export type { FileMeta, StoredFileMeta } from './ai';
+export type { FileMeta, StoredFileMeta, ToolAction, ActionPayload } from './ai';

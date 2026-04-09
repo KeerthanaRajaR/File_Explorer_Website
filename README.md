@@ -7,6 +7,7 @@ A production-grade, secure, scalable file explorer web application built with **
 ## ✨ Features
 - **UI Views:** Toggle between clean Grid and List views.
 - **File Operations:** Browse, Create Folders, Rename, Copy, Cut, Paste, Upload (Multi-file Drag and Drop ready) and Delete.
+- **AI Agent (RAG + Actions):** Semantic search plus safe tool-calling for delete, move, rename, and create-folder workflows.
 - **Security:** Bulletproof path traversal protections resolving paths against a restricted Base Environment Directory.
 - **Storage Metrics:** Live tracking of disk usage out of a mocked Quota.
 - **Keyboard Shortcuts:** Built natively (Ctrl+A, Ctrl+C/X/V, Escape, Delete).
@@ -39,6 +40,8 @@ A production-grade, secure, scalable file explorer web application built with **
 - `npm run build`: Compiles the application for production.
 - `npm run start`: Runs the compiled production server.
 - `npm run lint`: Validates code style and checks.
+- `npm run test`: Runs Jest unit tests.
+- `npm run test:watch`: Runs Jest in watch mode.
 - *(Coming soon)* `npm run seed`: Generates initial mock folders.
 
 ## 🧱 Folder Structure Explanation
@@ -61,6 +64,13 @@ Responses always adhere to: `{ success: boolean, data: any | null, error: string
 - **POST** `/api/rename` | Changes absolute name configurations.
 - **POST** `/api/paste` | Facilitates recursive Copy/Cut operations.
 - **DELETE** `/api/delete?path=` | Recursively deletes folders or files.
+- **POST** `/api/ai/search` | Semantic search + intent detection + action planning.
+- **POST** `/api/ai/actions` | Executes confirmed AI actions.
+
+### AI Action Safety
+- Delete/move/rename actions are returned with `requiresConfirmation: true` from the planner.
+- The UI confirms before execution.
+- Confirmed actions are audited in `storage/ai/actions.log`.
 
 ## 🧠 System Architecture Explanation
 This application employs a modern **vertical slicing architecture** tailored for Next.js. The UI uses Contextual Hooks to request operations against standard stateless API Route Handlers. Those handlers wrap the payload and pass it strictly to the `services` layer which interacts with the `fs` module safely. All external inputs are piped through `resolveSafePath` rendering directory traversal (`../`) attacks impossible.

@@ -24,16 +24,23 @@ export async function getFileResponse(targetPath: string, isDownload: boolean) {
     if (stats.isDirectory()) return fail('PATH_IS_DIRECTORY');
 
     const fileBuffer = await fsp.readFile(absolutePath);
-    const mimeType = getMimeType(absolutePath);
+    const mimeType = getMimeType(absolutePath, fileBuffer);
     const fileName = path.basename(absolutePath);
 
     const headers = new Headers();
     headers.set('Content-Type', mimeType);
     headers.set('Content-Length', stats.size.toString());
+    headers.set('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+    headers.set('Pragma', 'no-cache');
+    headers.set('Expires', '0');
 
-    // Always provide filename to avoid "file (n)" generic naming in browser
-    const disposition = isDownload ? 'attachment' : 'inline';
-    headers.set('Content-Disposition', `${disposition}; filename="${encodeURIComponent(fileName)}"`);
+    // Force inline disposition for open/view flows so browsers prefer rendering.
+    // Only explicit downloads should use attachment.
+    if (isDownload) {
+      headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    } else {
+      headers.set('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+    }
 
     return succeed(new NextResponse(fileBuffer, { status: 200, headers }));
   } catch (err) {
@@ -46,7 +53,49 @@ export async function getThumbnail(targetPath: string) {
 }
 
 // Helper for file extension to mime (basic)
-const getMimeType = (filePath: string) => {
+const detectMimeFromSignature = (buffer: Buffer): string | null => {
+  if (buffer.length >= 4) {
+    // PDF: %PDF (can appear after a few leading bytes)
+    const probeLength = Math.min(buffer.length, 1024);
+    for (let i = 0; i <= probeLength - 4; i++) {
+      if (buffer[i] === 0x25 && buffer[i + 1] === 0x50 && buffer[i + 2] === 0x44 && buffer[i + 3] === 0x46) {
+        return 'application/pdf';
+      }
+    }
+
+    // PNG
+    if (
+      buffer.length >= 8 &&
+      buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+      buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+    ) {
+      return 'image/png';
+    }
+
+    // JPEG
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+      return 'image/jpeg';
+    }
+
+    // GIF87a / GIF89a
+    if (
+      buffer.length >= 6 &&
+      buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38 &&
+      (buffer[4] === 0x37 || buffer[4] === 0x39) && buffer[5] === 0x61
+    ) {
+      return 'image/gif';
+    }
+
+    // ZIP (docx/xlsx/pptx container)
+    if (buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04) {
+      return 'application/zip';
+    }
+  }
+
+  return null;
+};
+
+const getMimeType = (filePath: string, fileBuffer?: Buffer) => {
   const ext = path.extname(filePath).toLowerCase();
   const mimes: Record<string, string> = {
     '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
@@ -58,7 +107,14 @@ const getMimeType = (filePath: string) => {
     '.mp4': 'video/mp4', '.webm': 'video/webm', '.mkv': 'video/x-matroska',
     '.csv': 'text/csv'
   };
-  return mimes[ext] || 'application/octet-stream';
+
+  const extensionMime = mimes[ext];
+  if (extensionMime) {
+    return extensionMime;
+  }
+
+  const sniffedMime = fileBuffer ? detectMimeFromSignature(fileBuffer) : null;
+  return sniffedMime || 'application/octet-stream';
 };
 
 export async function browseDirectory(targetPath: string) {
