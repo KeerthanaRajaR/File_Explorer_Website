@@ -5,6 +5,7 @@ import { AiSearchService } from '@/services/aiSearch.service';
 import { detectIntent } from '@/lib/ai/intent';
 import { ActionPayload } from '@/types/ai';
 import { getBaseRoot, resolveSafePath } from '@/lib/server/pathUtils';
+import { summarizeFileByPath } from '@/lib/ai/fileSummary';
 
 type SearchResult = {
   path: string;
@@ -402,6 +403,54 @@ export async function POST(req: NextRequest) {
 
     if (!query) {
       return NextResponse.json({ success: false, data: null, error: 'Query is required' }, { status: 400 });
+    }
+
+    const normalizedQuery = query.toLowerCase();
+    const wantsExplanation = /(explain|summari[sz]e|summary|what\s+is\s+in|details\s+about|briefly)/i.test(normalizedQuery);
+    if (wantsExplanation) {
+      const intent = detectIntent(query);
+      const semanticQuery = intent?.searchHint || query;
+      const rawRagResults = (await AiSearchService.search(semanticQuery)) as SearchResult[];
+      const bestTargets = preferCurrentPath(await resolveBestTargets(query, rawRagResults, currentPath), currentPath);
+      const target = bestTargets[0];
+
+      if (!target) {
+        return NextResponse.json({
+          success: true,
+          type: 'message',
+          data: [],
+          summary: `I couldn't find a file to explain for "${query}". Try mentioning a file name like resume.pdf.`,
+          error: null,
+        });
+      }
+
+      try {
+        const explained = await summarizeFileByPath(target, query);
+        const keyPointsBlock = explained.keyPoints.length > 0
+          ? `\n\nKey points:\n${explained.keyPoints.map((point) => `• ${point}`).join('\n')}`
+          : '';
+
+        return NextResponse.json({
+          success: true,
+          type: 'message',
+          data: [{ path: target, name: explained.fileName, score: 1 }],
+          summary: `Explanation for ${explained.fileName}:\n\n${explained.summary}${keyPointsBlock}`,
+          error: null,
+        });
+      } catch (explainError: any) {
+        const message = explainError?.message || 'FAILED_TO_EXPLAIN_FILE';
+        return NextResponse.json({
+          success: true,
+          type: 'message',
+          data: [{ path: target, name: target.split('/').pop() || target, score: 1 }],
+          summary: message === 'DOC_NOT_SUPPORTED_USE_DOCX'
+            ? 'I can explain DOCX files, but .doc is not supported. Please convert to .docx.'
+            : message === 'UNSUPPORTED_FILE_TYPE'
+              ? 'I can currently explain PDF, DOCX, and text-based files.'
+              : 'I found the file, but I could not extract text to explain it.',
+          error: null,
+        });
+      }
     }
 
     if (AiSearchService.isGreeting(query)) {

@@ -4,6 +4,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, File, AlertTriangle } from 'lucide-react';
 import { ActionPayload } from '@/types/ai';
 
+const CHAT_STORAGE_KEY = 'file-explorer-ai-chat-v1';
+const MAX_PERSISTED_MESSAGES = 150;
+const CHAT_HISTORY_API = '/api/ai/history';
+
 interface AiPanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -19,6 +23,12 @@ export interface Message {
   files?: Array<{ name: string; path: string }>;
   action?: ActionPayload & { confirmed?: boolean };
 }
+
+const isValidMessage = (item: unknown): item is Message => {
+  if (!item || typeof item !== 'object') return false;
+  const msg = item as Partial<Message>;
+  return typeof msg.id === 'string' && (msg.role === 'user' || msg.role === 'assistant') && typeof msg.content === 'string';
+};
 
 const toParentPath = (targetPath: string): string => {
   const lastSlash = targetPath.lastIndexOf('/');
@@ -44,7 +54,79 @@ export function AiPanel({ isOpen, onClose, onNavigate, onRefresh, currentPath }:
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const hydrate = async () => {
+      try {
+        let localMessages: Message[] = [];
+        const raw = window.localStorage.getItem(CHAT_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as unknown;
+          if (Array.isArray(parsed)) {
+            localMessages = parsed.filter(isValidMessage).slice(-MAX_PERSISTED_MESSAGES);
+          }
+        }
+
+        const response = await fetch(CHAT_HISTORY_API, { method: 'GET' });
+        const payload = await response.json() as { success?: boolean; data?: unknown };
+        const serverMessages = Array.isArray(payload?.data)
+          ? (payload.data as unknown[]).filter(isValidMessage).slice(-MAX_PERSISTED_MESSAGES)
+          : [];
+
+        const chosen = serverMessages.length > 0 ? serverMessages : localMessages;
+        if (mounted && chosen.length > 0) {
+          setMessages(chosen);
+        }
+      } catch {
+        // ignore hydration failures and continue with empty chat
+      } finally {
+        if (mounted) setIsHydrated(true);
+      }
+    };
+
+    hydrate();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const compact = messages.slice(-MAX_PERSISTED_MESSAGES);
+
+    try {
+      window.localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(compact));
+    } catch {
+      // ignore storage quota / serialization errors
+    }
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = setTimeout(() => {
+      fetch(CHAT_HISTORY_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: compact }),
+      }).catch(() => {
+        // ignore save failures
+      });
+    }, 250);
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [messages, isHydrated]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

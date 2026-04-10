@@ -3,6 +3,7 @@ import fsp from 'fs/promises';
 import path from 'path';
 import AdmZip from 'adm-zip';
 import { getBaseRoot, resolveSafePath } from '@/lib/server/pathUtils';
+import { moveToTrash } from '@/lib/features/trash';
 
 const assertSafePath = (targetPath: string): string => {
   const absolutePath = resolveSafePath(targetPath);
@@ -45,27 +46,12 @@ export async function deleteFiles(paths: string[]): Promise<void> {
     throw new Error('INVALID_TARGETS');
   }
 
-  const baseRoot = getBaseRoot();
-  const trashDir = path.join(baseRoot, 'Trash');
-  await fsp.mkdir(trashDir, { recursive: true });
-
   for (const targetPath of paths) {
     if (targetPath === '/' || targetPath === '' || targetPath === '\\') {
       throw new Error('CANNOT_DELETE_ROOT');
     }
 
-    const absoluteSource = assertSafePath(targetPath);
-    await assertExists(absoluteSource);
-
-    if (absoluteSource === trashDir || absoluteSource.startsWith(trashDir + path.sep)) {
-      throw new Error('ALREADY_IN_TRASH');
-    }
-
-    const fileName = path.basename(absoluteSource);
-    const destinationCandidate = path.join(trashDir, fileName);
-    const destination = await createUniquePath(destinationCandidate);
-
-    await fsp.rename(absoluteSource, destination);
+    await moveToTrash(targetPath);
   }
 }
 

@@ -1,0 +1,33 @@
+[
+  {
+    "id": "1775828272937",
+    "role": "user",
+    "content": "hi"
+  },
+  {
+    "id": "1775828273702",
+    "role": "assistant",
+    "content": "Hello! 👋 I'm your AI Assistant. I can help you find files using semantic search. How can I help you today?",
+    "files": []
+  },
+  {
+    "id": "1775828371739",
+    "role": "user",
+    "content": "search resume"
+  },
+  {
+    "id": "1775828373193",
+    "role": "assistant",
+    "content": "Based on the search query \"search resume,\" I found two highly relevant files:\n\nA resume file from Keerthana R exists in both the '/Documents/' and '/Downloads/' folders with identical content, suggesting a duplication.",
+    "files": [
+      {
+        "name": "keerthana_resume.pdf",
+        "path": "/Documents/keerthana_resume.pdf"
+      },
+      {
+        "name": "keerthana_resume.pdf",
+        "path": "/Downloads/keerthana_resume.pdf"
+      }
+    ]
+  }
+]

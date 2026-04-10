@@ -10,6 +10,8 @@ interface ToolbarProps {
   onNavigateTo: (path: string) => void;
   viewMode: 'grid' | 'list';
   setViewMode: (mode: 'grid' | 'list') => void;
+  featureMode: 'files' | 'smart' | 'duplicates';
+  onFeatureModeChange: (mode: 'files' | 'smart' | 'duplicates') => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   onCreateFolder: () => void;
@@ -22,7 +24,7 @@ interface ToolbarProps {
 
 export function Toolbar({ 
   currentPath, onNavigateUp, onNavigateTo, 
-  viewMode, setViewMode, searchQuery, setSearchQuery,
+  viewMode, setViewMode, featureMode, onFeatureModeChange, searchQuery, setSearchQuery,
   onCreateFolder, onUpload, onRefresh,
   clipboard, clearClipboard, uploadProgress
 }: ToolbarProps) {
@@ -66,6 +68,19 @@ export function Toolbar({
         </form>
         
         <div className="flex items-center gap-2 ml-4">
+          <button
+            onClick={() => onFeatureModeChange(featureMode === 'smart' ? 'files' : 'smart')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors shadow-sm ${featureMode === 'smart' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'}`}
+          >
+            Smart View
+          </button>
+          <button
+            onClick={() => onFeatureModeChange(featureMode === 'duplicates' ? 'files' : 'duplicates')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors shadow-sm ${featureMode === 'duplicates' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'}`}
+          >
+            Duplicates
+          </button>
+
           <button onClick={onRefresh} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="Refresh">
              <RefreshCw size={18} />
           </button>

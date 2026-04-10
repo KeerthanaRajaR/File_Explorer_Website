@@ -8,6 +8,7 @@ import { extractTagsFromFileName, extractContent, createEmbeddingInput } from '@
 import { generateEmbedding } from '@/lib/ai/embedding';
 import { AiStorage } from '@/lib/ai/storage';
 import { v4 as uuidv4 } from 'uuid';
+import { moveToTrash } from '@/lib/features/trash';
 
 // Utility to wrap response uniformly
 // Fixed getThumbnail export
@@ -278,47 +279,16 @@ export async function createFolder(targetPath: string, folderName: string) {
 }
 
 export async function deletePath(targetPath: string) {
-  // Prevent deleting root
-  if (targetPath === '/' || targetPath === '\\' || targetPath === '') {
-    return fail('CANNOT_DELETE_ROOT');
-  }
-
-  const absolutePath = resolveSafePath(targetPath);
-  if (!absolutePath) return fail('INVALID_PATH');
-  if (!fs.existsSync(absolutePath)) return fail('PATH_NOT_FOUND');
-
   try {
-    const stats = await fsp.stat(absolutePath);
-    const fileName = path.basename(absolutePath);
-    const baseRoot = getBaseRoot();
-    const trashDir = path.join(baseRoot, 'Trash');
-
-    // Ensure trash directory exists
-    if (!fs.existsSync(trashDir)) {
-      await fsp.mkdir(trashDir, { recursive: true });
+    if (targetPath === '/' || targetPath === '\\' || targetPath === '') {
+      return fail('CANNOT_DELETE_ROOT');
     }
 
-    // Do not allow moving things that are already in Trash (or the Trash folder itself)
-    if (absolutePath.startsWith(trashDir)) {
-       // If permanent delete from trash is needed, we could call unlink/rm here.
-       // For now, let's just say we don't delete from trash.
-       return fail('ALREADY_IN_TRASH');
-    }
-
-    let destPath = path.join(trashDir, fileName);
-    
-    // Collision handling: append timestamp if name exists in trash
-    if (fs.existsSync(destPath)) {
-      const ext = path.extname(fileName);
-      const name = path.basename(fileName, ext);
-      destPath = path.join(trashDir, `${name}_${Date.now()}${ext}`);
-    }
-
-    await fsp.rename(absolutePath, destPath);
-    return succeed(true);
+    const entry = await moveToTrash(targetPath);
+    return succeed(entry);
   } catch (err) {
     console.error('Move to Trash failed:', err);
-    return fail('FAILED_TO_DELETE');
+    return fail((err as Error).message || 'FAILED_TO_DELETE');
   }
 }
 
@@ -363,6 +333,8 @@ export async function pasteFiles(sourcePaths: string[], destPath: string, action
     const destStats = await fsp.stat(absoluteDest);
     if (!destStats.isDirectory()) return fail('DESTINATION_NOT_DIRECTORY');
 
+    const movedFiles: Array<{ sourcePath: string; destinationPath: string; action: 'copy' | 'cut' }> = [];
+
     for (const src of sourcePaths) {
       const absoluteSrc = resolveSafePath(src);
       if (!absoluteSrc) continue; // Skip invalid paths silently or we could fail entirely
@@ -384,8 +356,14 @@ export async function pasteFiles(sourcePaths: string[], destPath: string, action
       } else {
         await fsp.cp(absoluteSrc, newAbsolutePath, { recursive: true });
       }
+
+      movedFiles.push({
+        sourcePath: src,
+        destinationPath: getRelativePath(newAbsolutePath),
+        action,
+      });
     }
-    return succeed(true);
+    return succeed(movedFiles);
   } catch (err) {
     return fail('FAILED_TO_PASTE');
   }
