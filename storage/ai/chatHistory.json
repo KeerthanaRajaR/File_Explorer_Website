@@ -1,24 +1,24 @@
 [
   {
-    "id": "1775828272937",
+    "id": "1775971472748",
     "role": "user",
-    "content": "hi"
+    "content": "heelo"
   },
   {
-    "id": "1775828273702",
+    "id": "1775971473449",
     "role": "assistant",
-    "content": "Hello! 👋 I'm your AI Assistant. I can help you find files using semantic search. How can I help you today?",
+    "content": "I couldn't find any documents matching your search for \"heelo\". Try different keywords or check if the files are uploaded.",
     "files": []
   },
   {
-    "id": "1775828371739",
+    "id": "1775971482153",
     "role": "user",
-    "content": "search resume"
+    "content": "search the resume file"
   },
   {
-    "id": "1775828373193",
+    "id": "1775971483163",
     "role": "assistant",
-    "content": "Based on the search query \"search resume,\" I found two highly relevant files:\n\nA resume file from Keerthana R exists in both the '/Documents/' and '/Downloads/' folders with identical content, suggesting a duplication.",
+    "content": "Based on your search for \"search the resume file\", I found two highly relevant results:\n\nThere are two identical PDF files, \"keerthana_resume.pdf\", located in different directories: \"/Documents/keerthana_resume.pdf\" (44% relevance) and \"/Downloads/keerthana_resume.pdf\" (44% relevance).",
     "files": [
       {
         "name": "keerthana_resume.pdf",
