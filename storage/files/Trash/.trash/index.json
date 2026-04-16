@@ -1,29 +1,11 @@
 [
   {
-    "id": "1775802287701-ezej7v",
-    "name": "logo_nobg.png",
-    "originalPath": "/Images/logo_nobg.png",
-    "trashedPath": "/Trash/logo_nobg.png",
-    "deletedAt": "2026-04-10T06:24:47.701Z",
-    "size": 0,
-    "type": "file"
-  },
-  {
-    "id": "1775802287654-o7hgts",
-    "name": "logo.png",
-    "originalPath": "/Images/logo.png",
-    "trashedPath": "/Trash/logo.png",
-    "deletedAt": "2026-04-10T06:24:47.655Z",
-    "size": 0,
-    "type": "file"
-  },
-  {
-    "id": "1775801550002-0egh1z",
-    "name": "Keerthana_R_AI_Engineer.docx",
-    "originalPath": "/Videos/Keerthana_R_AI_Engineer.docx",
-    "trashedPath": "/Trash/Keerthana_R_AI_Engineer.docx",
-    "deletedAt": "2026-04-10T06:12:30.002Z",
-    "size": 9348,
-    "type": "file"
+    "id": "1776317936212-xnu4uw",
+    "name": "Projects",
+    "originalPath": "/Projects",
+    "trashedPath": "/Trash/Projects",
+    "deletedAt": "2026-04-16T05:38:56.212Z",
+    "size": 4096,
+    "type": "folder"
   }
 ]

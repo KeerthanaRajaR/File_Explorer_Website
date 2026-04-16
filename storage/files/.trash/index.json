@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": "1776324257202-7ybmr8",
+    "name": "Images_folder",
+    "originalPath": "/Images_folder",
+    "trashedPath": "/Trash/Images_folder",
+    "deletedAt": "2026-04-16T07:24:17.203Z",
+    "size": 4096,
+    "type": "folder"
+  },
+  {
+    "id": "1776317995146-au8ylw",
+    "name": ".trash",
+    "originalPath": "/.trash",
+    "trashedPath": "/Trash/.trash",
+    "deletedAt": "2026-04-16T05:39:55.147Z",
+    "size": 4096,
+    "type": "folder"
+  }
+]

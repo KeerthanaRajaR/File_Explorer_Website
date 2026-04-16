@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useFileExplorer } from '@/hooks/useFileExplorer';
 import { useSelection } from '@/hooks/useSelection';
 import { Sidebar } from './Sidebar';
@@ -11,6 +11,7 @@ import { FileNode } from '@/types';
 import { Copy, Scissors, Trash2, Edit2, Info, X, Link as LinkIcon, ExternalLink, Download, Undo2, Redo2 } from 'lucide-react';
 import { DuplicatePanel } from './features/DuplicatePanel';
 import { TrashPanel } from './features/TrashPanel';
+import { CommandPalette } from './features/CommandPalette';
 import { SmartFileGroup } from '@/lib/features/importance';
 import type { DuplicateGroup } from '@/types/features';
 
@@ -19,7 +20,7 @@ export function FileExplorer() {
     currentPath, files, storageInfo, loading, error, clipboard, uploadProgress,
     duplicateGroups, trashEntries, smartGroups, historyState,
     navigateTo, navigateUp, createFolder, rename, deleteItems, clearClipboard,
-    upload, copyToClipboard, pasteFromClipboard, removeBackground, refresh,
+    upload, copyToClipboard, pasteFromClipboard, removeBackground, refresh, refreshAll,
     restoreTrashItem, permanentlyDeleteTrashItem, undo, redo
   } = useFileExplorer('/');
 
@@ -34,6 +35,7 @@ export function FileExplorer() {
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [highlightedFile, setHighlightedFile] = useState<string | null>(null);
   const [featureMode, setFeatureMode] = useState<'files' | 'smart' | 'duplicates'>('files');
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
 
   const handleNavigateTo = (path: string, highlight?: string) => {
     navigateTo(path);
@@ -50,8 +52,13 @@ export function FileExplorer() {
 
   // Apply dark mode
   useEffect(() => {
-    if (isDarkMode) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+    }
   }, [isDarkMode]);
 
   // Click outside to close context menu
@@ -111,6 +118,12 @@ export function FileExplorer() {
         } else if (key === 'y') {
           e.preventDefault();
           await redo();
+        } else if (key === 'k' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          setIsCommandPaletteOpen(true);
+        } else if (key === 'p' && (e.ctrlKey || e.metaKey) && e.shiftKey) {
+          e.preventDefault();
+          setIsCommandPaletteOpen(true);
         }
       } else if (e.key === 'Enter' && selectedIds.size === 1) {
         e.preventDefault();
@@ -170,6 +183,57 @@ export function FileExplorer() {
     return latest?.relativePath || null;
   };
 
+  const handlePaletteAction = useCallback(async (action: string, params?: any) => {
+    switch (action) {
+      case 'create_folder':
+        handleCreateFolder();
+        break;
+      case 'delete':
+        if (selectedIds.size > 0 && confirm(`Are you sure you want to delete ${selectedIds.size} items?`)) {
+          const paths = Array.from(selectedIds).map(id => files.find(f => f.name === id)?.relativePath).filter(Boolean) as string[];
+          await deleteItems(paths);
+          clearSelection();
+        }
+        break;
+      case 'rename':
+        if (selectedIds.size === 1) {
+          const file = files.find(f => f.name === Array.from(selectedIds)[0]);
+          if (file) {
+            const newName = prompt('Enter new name:', file.name);
+            if (newName) await rename(file.relativePath, newName);
+          }
+        }
+        break;
+      case 'goto':
+        const targetPath = prompt('Enter path to navigate to:', currentPath);
+        if (targetPath) navigateTo(targetPath || '/');
+        break;
+      case 'undo':
+        await undo();
+        break;
+      case 'redo':
+        await redo();
+        break;
+      case 'theme_dark':
+        setIsDarkMode(true);
+        break;
+      case 'theme_light':
+        setIsDarkMode(false);
+        break;
+      case 'refresh':
+        await refreshAll();
+        break;
+      case 'properties':
+        if (selectedIds.size === 1) {
+          const file = files.find(f => f.name === Array.from(selectedIds)[0]);
+          if (file) setShowProperties(file);
+        }
+        break;
+      default:
+        console.warn('Unknown action:', action);
+    }
+  }, [selectedIds, files, currentPath, handleCreateFolder, deleteItems, clearSelection, rename, navigateTo, undo, redo, refreshAll]);
+
   return (
     <div className="flex h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 overflow-hidden font-sans">
       <Sidebar 
@@ -193,7 +257,7 @@ export function FileExplorer() {
           setSearchQuery={setSearchQuery}
           onCreateFolder={handleCreateFolder}
           onUpload={handleUploadClick}
-          onRefresh={refresh}
+          onRefresh={() => refresh()}
           clipboard={clipboard}
           clearClipboard={clearClipboard}
           uploadProgress={uploadProgress}
@@ -322,7 +386,7 @@ export function FileExplorer() {
               isOpen={isAiOpen} 
               onClose={() => setIsAiOpen(false)} 
               onNavigate={(path, highlight) => handleNavigateTo(path, highlight)}
-              onRefresh={refresh}
+              onRefresh={() => refresh()}
               currentPath={currentPath}
            />
         </div>
@@ -513,6 +577,15 @@ export function FileExplorer() {
              </div>
           </div>
         )}
+
+        {/* Command Palette */}
+        <CommandPalette 
+          isOpen={isCommandPaletteOpen}
+          onClose={() => setIsCommandPaletteOpen(false)}
+          onAction={handlePaletteAction}
+          currentPath={currentPath}
+          selectedCount={selectedIds.size}
+        />
       </div>
     </div>
   );
