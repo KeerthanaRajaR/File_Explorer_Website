@@ -14,6 +14,10 @@ import { TrashPanel } from './features/TrashPanel';
 import { CommandPalette } from './features/CommandPalette';
 import { SmartFileGroup } from '@/lib/features/importance';
 import type { DuplicateGroup } from '@/types/features';
+import { getFileType } from '@/lib/utils/fileType';
+import { ImageViewer } from './viewers/ImageViewer';
+import { VideoPlayer } from './viewers/VideoPlayer';
+import { AudioPlayer } from './viewers/AudioPlayer';
 
 export function FileExplorer() {
   const {
@@ -36,6 +40,8 @@ export function FileExplorer() {
   const [highlightedFile, setHighlightedFile] = useState<string | null>(null);
   const [featureMode, setFeatureMode] = useState<'files' | 'smart' | 'duplicates'>('files');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [activeViewerFile, setActiveViewerFile] = useState<FileNode | null>(null);
+  const [viewerType, setViewerType] = useState<'image' | 'video' | 'audio' | null>(null);
 
   const handleNavigateTo = (path: string, highlight?: string) => {
     navigateTo(path);
@@ -47,6 +53,29 @@ export function FileExplorer() {
       }, 300);
     } else {
       setHighlightedFile(null);
+    }
+  };
+
+  const handleOpenFile = (file: FileNode) => {
+    if (file.type === 'folder') {
+      navigateTo(file.relativePath);
+      return;
+    }
+
+    const type = getFileType(file.name);
+    if (type === 'image') {
+      setActiveViewerFile(file);
+      setViewerType('image');
+    } else if (type === 'video') {
+      setActiveViewerFile(file);
+      setViewerType('video');
+    } else if (type === 'audio') {
+      setActiveViewerFile(file);
+      setViewerType('audio');
+    } else if (file.extension.toLowerCase() === '.docx') {
+      window.open(`/api/preview/docx?path=${encodeURIComponent(file.relativePath)}`, '_blank');
+    } else {
+      window.open(`/api/file?path=${encodeURIComponent(file.relativePath)}`, '_blank');
     }
   };
 
@@ -338,6 +367,7 @@ export function FileExplorer() {
                 toggleSelection={toggleSelection}
                 onContextMenu={handleContextMenu}
                 highlightedId={highlightedFile}
+                onFileOpen={handleOpenFile}
               />
             )}
            </div>
@@ -405,13 +435,27 @@ export function FileExplorer() {
             }}
           >
             {contextMenu.file.type === 'file' && (
-               <a 
-                  href={`/api/file?path=${encodeURIComponent(contextMenu.file.relativePath)}`}
-                  target="_blank" rel="noreferrer"
+              <>
+                <button 
                   className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium"
-               >
-                 <ExternalLink size={14} /> Open With Browser
-               </a>
+                  onClick={() => {
+                    handleOpenFile(contextMenu.file);
+                    setContextMenu(null);
+                  }}
+                >
+                  <ExternalLink size={14} /> 
+                  {getFileType(contextMenu.file.name) === 'image' ? 'Open with Image Viewer' : 
+                   getFileType(contextMenu.file.name) === 'video' ? 'Open with Video Player' : 
+                   getFileType(contextMenu.file.name) === 'audio' ? 'Open with Audio Player' : 'Open'}
+                </button>
+                <a 
+                   href={`/api/file?path=${encodeURIComponent(contextMenu.file.relativePath)}`}
+                   target="_blank" rel="noreferrer"
+                   className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 text-gray-500"
+                >
+                  <ExternalLink size={14} /> Open With Browser
+                </a>
+              </>
             )}
             
             <button 
@@ -586,6 +630,37 @@ export function FileExplorer() {
           currentPath={currentPath}
           selectedCount={selectedIds.size}
         />
+
+        {/* Media Viewers */}
+        {viewerType === 'image' && activeViewerFile && (
+          <ImageViewer 
+            file={activeViewerFile} 
+            onClose={() => {
+              setActiveViewerFile(null);
+              setViewerType(null);
+            }} 
+          />
+        )}
+        
+        {viewerType === 'video' && activeViewerFile && (
+          <VideoPlayer 
+            file={activeViewerFile} 
+            onClose={() => {
+              setActiveViewerFile(null);
+              setViewerType(null);
+            }} 
+          />
+        )}
+        
+        {viewerType === 'audio' && activeViewerFile && (
+          <AudioPlayer 
+            file={activeViewerFile} 
+            onClose={() => {
+              setActiveViewerFile(null);
+              setViewerType(null);
+            }} 
+          />
+        )}
       </div>
     </div>
   );

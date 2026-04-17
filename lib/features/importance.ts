@@ -69,9 +69,9 @@ export const buildSmartFileGroups = (files: FileNode[], accessHistory: Record<st
     accessCount: accessHistory[file.relativePath]?.count || 0,
   }));
 
-  return [
+  return ([
     { category: 'important', files: scored.filter(file => categorizeImportance(file.score) === 'important').sort((left, right) => right.score - left.score) },
     { category: 'recent', files: scored.filter(file => categorizeImportance(file.score) === 'recent').sort((left, right) => right.score - left.score) },
     { category: 'unused', files: scored.filter(file => categorizeImportance(file.score) === 'unused').sort((left, right) => left.score - right.score) },
-  ].filter(group => group.files.length > 0);
+  ] as SmartFileGroup[]).filter(group => group.files.length > 0);
 };

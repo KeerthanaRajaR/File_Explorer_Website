@@ -15,9 +15,10 @@ interface FileViewProps {
   toggleSelection: (id: string) => void;
   onContextMenu: (e: React.MouseEvent, file: FileNode) => void;
   highlightedId?: string | null;
+  onFileOpen: (file: FileNode) => void;
 }
 
-export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelection, onContextMenu, highlightedId }: FileViewProps) {
+export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelection, onContextMenu, highlightedId, onFileOpen }: FileViewProps) {
   
   // Track image load errors to fallback to icon
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
@@ -27,26 +28,53 @@ export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelec
     
     // Interactive Thumbnails for Images
     const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'].includes(ext);
-    if (isImage && viewMode === 'grid' && !imageErrors.has(file.relativePath)) {
-       return (
-         <img 
-            src={`/api/thumbnail?path=${encodeURIComponent(file.relativePath)}`} 
-            alt={file.name}
-            className="w-16 h-16 object-cover rounded-md shadow-sm border border-gray-200 dark:border-gray-700"
-             onError={() => setImageErrors(prev => new Set(prev).add(file.relativePath))}
-         />
-       );
-    }
     
     const size = viewMode === 'list' ? 24 : 48;
     
     if (file.type === 'folder') return <Folder size={size} className="text-blue-400" fill="currentColor" strokeWidth={1} />;
     
-    if (isImage) return <ImageIcon size={size} className="text-purple-400" strokeWidth={1.5} />;
+    if (isImage) {
+      if (viewMode === 'grid' && !imageErrors.has(file.relativePath)) {
+        return (
+          <img 
+             src={`/api/thumbnail?path=${encodeURIComponent(file.relativePath)}`} 
+             alt={file.name}
+             className="w-16 h-16 object-cover rounded-md shadow-sm border border-gray-200 dark:border-gray-700"
+             onError={() => setImageErrors(prev => new Set(prev).add(file.relativePath))}
+          />
+        );
+      }
+      return <ImageIcon size={size} className="text-purple-400" strokeWidth={1.5} />;
+    }
     
     if (['.zip', '.rar', '.7z', '.tar', '.gz'].includes(ext)) return <Archive size={size} className="text-yellow-600 dark:text-yellow-500" strokeWidth={1.5} />;
-    if (['.mp3', '.wav', '.ogg', '.flac'].includes(ext)) return <FileAudio size={size} className="text-pink-500" strokeWidth={1.5} />;
-    if (['.mp4', '.mkv', '.avi', '.mov'].includes(ext)) return <FileVideo size={size} className="text-indigo-500" strokeWidth={1.5} />;
+    
+    if (['.mp3', '.wav', '.ogg', '.flac', '.aac'].includes(ext)) {
+      if (viewMode === 'grid') {
+        return (
+          <div className="w-16 h-16 rounded-md bg-pink-50 dark:bg-pink-900/20 border border-pink-100 dark:border-pink-800/50 flex items-center justify-center">
+            <FileAudio size={32} className="text-pink-500" strokeWidth={1.5} />
+          </div>
+        );
+      }
+      return <FileAudio size={size} className="text-pink-500" strokeWidth={1.5} />;
+    }
+    if (['.mp4', '.mkv', '.avi', '.mov', '.webm'].includes(ext)) {
+      if (viewMode === 'grid') {
+        return (
+          <div className="relative w-16 h-16 rounded-md overflow-hidden shadow-sm border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+            <video 
+              src={`/api/file?path=${encodeURIComponent(file.relativePath)}#t=1`} 
+              className="w-full h-full object-cover"
+              preload="metadata"
+              muted
+              playsInline
+            />
+          </div>
+        );
+      }
+      return <FileVideo size={size} className="text-indigo-500" strokeWidth={1.5} />;
+    }
     if (['.csv', '.xls', '.xlsx'].includes(ext)) return <FileSpreadsheet size={size} className="text-green-500" strokeWidth={1.5} />;
     if (['.json', '.js', '.ts', '.html', '.css', '.tsx', '.jsx'].includes(ext)) return <FileCode size={size} className="text-orange-500" strokeWidth={1.5} />;
     if (['.txt', '.md', '.pdf', '.doc', '.docx'].includes(ext)) return <FileText size={size} className="text-gray-500" strokeWidth={1.5} />;
@@ -100,14 +128,7 @@ export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelec
                   }}
                   onDoubleClick={(e) => {
                      e.stopPropagation();
-                     const ext = file.extension.toLowerCase();
-                     if (ext === '.docx') {
-                        window.open(`/api/preview/docx?path=${encodeURIComponent(file.relativePath)}`, '_blank');
-                     } else if (file.type === 'file') {
-                        window.open(`/api/file?path=${encodeURIComponent(file.relativePath)}`, '_blank');
-                     } else if (file.type === 'folder') {
-                        onNavigate(file.relativePath);
-                     }
+                     onFileOpen(file);
                   }}
                   onContextMenu={(e) => onContextMenu(e, file)}
                   className={`border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30' : ''} ${highlightedId === file.name ? 'ring-2 ring-purple-500 ring-inset' : ''}`}
@@ -156,14 +177,7 @@ export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelec
               }}
               onDoubleClick={(e) => {
                  e.stopPropagation();
-                 const ext = file.extension.toLowerCase();
-                 if (ext === '.docx') {
-                    window.open(`/api/preview/docx?path=${encodeURIComponent(file.relativePath)}`, '_blank');
-                 } else if (file.type === 'file') {
-                    window.open(`/api/file?path=${encodeURIComponent(file.relativePath)}`, '_blank');
-                 } else if (file.type === 'folder') {
-                    onNavigate(file.relativePath);
-                 }
+                 onFileOpen(file);
               }}
               onContextMenu={(e) => onContextMenu(e, file)}
               className={`group relative flex flex-col items-center p-4 rounded-xl border cursor-pointer shadow-sm transition-all ${
