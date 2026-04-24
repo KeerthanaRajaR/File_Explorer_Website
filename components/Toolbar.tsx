@@ -1,17 +1,22 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ArrowUp, LayoutGrid, List as ListIcon, Search, FolderPlus, UploadCloud, RefreshCw, X, FileCheck2 } from 'lucide-react';
+import { ArrowUp, LayoutGrid, List as ListIcon, Search, FolderPlus, UploadCloud, RefreshCw, X, FileCheck2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ClipboardState, UploadProgressInfo } from '@/hooks/useFileExplorer';
 
 interface ToolbarProps {
   currentPath: string;
   onNavigateUp: () => void;
   onNavigateTo: (path: string) => void;
+  goBack: () => void;
+  goForward: () => void;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  recentVisitedFolders: string[];
   viewMode: 'grid' | 'list';
   setViewMode: (mode: 'grid' | 'list') => void;
-  featureMode: 'files' | 'smart' | 'duplicates';
-  onFeatureModeChange: (mode: 'files' | 'smart' | 'duplicates') => void;
+  featureMode: 'files' | 'smart' | 'duplicates' | 'storage';
+  onFeatureModeChange: (mode: 'files' | 'smart' | 'duplicates' | 'storage') => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   onCreateFolder: () => void;
@@ -24,6 +29,8 @@ interface ToolbarProps {
 
 export function Toolbar({ 
   currentPath, onNavigateUp, onNavigateTo, 
+  goBack, goForward, canGoBack, canGoForward,
+  recentVisitedFolders,
   viewMode, setViewMode, featureMode, onFeatureModeChange, searchQuery, setSearchQuery,
   onCreateFolder, onUpload, onRefresh,
   clipboard, clearClipboard, uploadProgress
@@ -46,10 +53,30 @@ export function Toolbar({
       
       {/* Top row: Navigation Bar */}
       <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 mr-1">
+          <button 
+            onClick={goBack}
+            disabled={!canGoBack}
+            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+            title="Back"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <button 
+            onClick={goForward}
+            disabled={!canGoForward}
+            className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30 transition-colors"
+            title="Forward"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
         <button 
           onClick={onNavigateUp}
           disabled={currentPath === '/'}
           className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          title="Up"
         >
           <ArrowUp size={18} />
         </button>
@@ -79,6 +106,12 @@ export function Toolbar({
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors shadow-sm ${featureMode === 'duplicates' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'}`}
           >
             Duplicates
+          </button>
+          <button
+            onClick={() => onFeatureModeChange(featureMode === 'storage' ? 'files' : 'storage')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors shadow-sm ${featureMode === 'storage' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700'}`}
+          >
+            Storage
           </button>
 
           <button onClick={onRefresh} className="p-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="Refresh">
@@ -151,6 +184,22 @@ export function Toolbar({
           </button>
         </div>
       </div>
+
+      {recentVisitedFolders.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">Recent folders:</span>
+          {recentVisitedFolders.map((folderPath) => (
+            <button
+              key={folderPath}
+              onClick={() => onNavigateTo(folderPath)}
+              className="shrink-0 px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              title={folderPath}
+            >
+              {folderPath === '/' ? 'Home' : folderPath.split('/').filter(Boolean).slice(-1)[0]}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import path from 'path';
 import mammoth from 'mammoth';
 import { PDFParse } from 'pdf-parse';
 import { resolveSafePath } from '@/lib/server/pathUtils';
-import { getGroqChatCompletion } from '@/lib/ai/groq';
+import { getGroqChatCompletion, type GroqResponse } from '@/lib/ai/groq';
 
 export type FileSummaryResult = {
   filePath: string;
@@ -164,7 +164,7 @@ const extractFileText = async (relativePath: string): Promise<{ absolutePath: st
   throw new Error('UNSUPPORTED_FILE_TYPE');
 };
 
-export const summarizeFileByPath = async (relativePath: string, userQuery?: string): Promise<FileSummaryResult> => {
+export const summarizeFileByPath = async (relativePath: string, userQuery?: string): Promise<FileSummaryResult & {groqCost?: number}> => {
   const { fileName, text } = await extractFileText(relativePath);
   const safeText = text.trim();
 
@@ -174,6 +174,7 @@ export const summarizeFileByPath = async (relativePath: string, userQuery?: stri
       fileName,
       summary: `I found ${fileName}, but there is no extractable text content to explain.`,
       keyPoints: ['No readable text content extracted from this file.'],
+      groqCost: 0,
     };
   }
 
@@ -189,18 +190,19 @@ export const summarizeFileByPath = async (relativePath: string, userQuery?: stri
       safeText,
     ].join('\n');
 
-    const raw = await getGroqChatCompletion(
+    const response: GroqResponse = await getGroqChatCompletion(
       prompt,
       'You explain documents for a file explorer. Keep summary concise and factual. Always return strict JSON only.'
     );
 
-    const parsed = parseJsonFromModel(raw);
+    const parsed = parseJsonFromModel(response.content);
     if (parsed && parsed.summary) {
       return {
         filePath: relativePath,
         fileName,
         summary: parsed.summary,
         keyPoints: parsed.keyPoints,
+        groqCost: response.cost,
       };
     }
   } catch {
@@ -213,5 +215,6 @@ export const summarizeFileByPath = async (relativePath: string, userQuery?: stri
     fileName,
     summary: fallback.summary,
     keyPoints: fallback.keyPoints,
+    groqCost: 0,
   };
 };

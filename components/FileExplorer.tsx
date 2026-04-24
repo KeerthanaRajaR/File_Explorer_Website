@@ -18,14 +18,19 @@ import { getFileType } from '@/lib/utils/fileType';
 import { ImageViewer } from './viewers/ImageViewer';
 import { VideoPlayer } from './viewers/VideoPlayer';
 import { AudioPlayer } from './viewers/AudioPlayer';
+import { useFileSuggestions } from '@/hooks/useFileSuggestions';
+import { StorageTreemap } from './storage/StorageTreemap';
+import type { StorageNode } from './storage/StorageTreemap';
+import { BulkActionsBar } from './bulk/BulkActionsBar';
 
 export function FileExplorer() {
   const {
     currentPath, files, storageInfo, loading, error, clipboard, uploadProgress,
-    duplicateGroups, trashEntries, smartGroups, historyState,
+    duplicateGroups, trashEntries, smartGroups, historyState, recentVisitedFolders,
     navigateTo, navigateUp, createFolder, rename, deleteItems, clearClipboard,
-    upload, copyToClipboard, pasteFromClipboard, removeBackground, refresh, refreshAll,
-    restoreTrashItem, permanentlyDeleteTrashItem, undo, redo
+    upload, copyToClipboard, pasteFromClipboard, removeBackground, fetchStorageDetails, refresh, refreshAll,
+    restoreTrashItem, permanentlyDeleteTrashItem, undo, redo,
+    goBack, goForward, canGoBack, canGoForward
   } = useFileExplorer('/');
 
   const { selectedIds, toggleSelection, selectAll, clearSelection } = useSelection<string>();
@@ -38,12 +43,24 @@ export function FileExplorer() {
   const [showProperties, setShowProperties] = useState<FileNode | null>(null);
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [highlightedFile, setHighlightedFile] = useState<string | null>(null);
-  const [featureMode, setFeatureMode] = useState<'files' | 'smart' | 'duplicates'>('files');
+  const [featureMode, setFeatureMode] = useState<'files' | 'smart' | 'duplicates' | 'storage'>('files');
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [activeViewerFile, setActiveViewerFile] = useState<FileNode | null>(null);
   const [viewerType, setViewerType] = useState<'image' | 'video' | 'audio' | null>(null);
+  const [storageTreeData, setStorageTreeData] = useState<StorageNode | null>(null);
+  const [storageTreeLoading, setStorageTreeLoading] = useState(false);
+  const [storageTreeError, setStorageTreeError] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const { recentFiles, frequentFiles, trackFileOpen } = useFileSuggestions();
+
+  const selectedFiles = files.filter(file => selectedIds.has(file.name));
 
   const handleNavigateTo = (path: string, highlight?: string) => {
+    if (path === '/agent-runs' || path.startsWith('/agent-runs/')) {
+      window.location.href = path;
+      return;
+    }
+
     navigateTo(path);
     if (highlight) {
       setHighlightedFile(highlight);
@@ -63,6 +80,7 @@ export function FileExplorer() {
     }
 
     const type = getFileType(file.name);
+    trackFileOpen(file);
     if (type === 'image') {
       setActiveViewerFile(file);
       setViewerType('image');
@@ -76,6 +94,107 @@ export function FileExplorer() {
       window.open(`/api/preview/docx?path=${encodeURIComponent(file.relativePath)}`, '_blank');
     } else {
       window.open(`/api/file?path=${encodeURIComponent(file.relativePath)}`, '_blank');
+    }
+  };
+
+  const handleQuickRename = async (file: FileNode) => {
+    const newName = prompt('Enter new name:', file.name);
+    if (!newName || newName === file.name) return;
+    await rename(file.relativePath, newName);
+  };
+
+  const handleQuickDelete = async (file: FileNode) => {
+    if (!confirm(`Delete ${file.name}?`)) return;
+    await deleteItems([file.relativePath]);
+    clearSelection();
+  };
+
+  const handleBulkMove = async () => {
+    if (selectedFiles.length === 0) return;
+    const destination = prompt('Move selected items to path:', currentPath);
+    if (!destination) return;
+
+    const sourcePaths = selectedFiles.map(file => file.relativePath);
+    setBulkBusy(true);
+    try {
+      const res = await fetch('/api/paste', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePaths, destinationPath: destination, action: 'cut' }),
+      });
+      const data = await res.json();
+      if (!data?.success) {
+        alert(data?.error || 'Failed to move selected items');
+      } else {
+        clearSelection();
+        await refreshAll();
+      }
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedFiles.length === 0) return;
+    if (!confirm(`Delete ${selectedFiles.length} selected item(s)?`)) return;
+    setBulkBusy(true);
+    try {
+      await deleteItems(selectedFiles.map(file => file.relativePath));
+      clearSelection();
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkCompressImages = async () => {
+    if (selectedFiles.length === 0) return;
+    if (!confirm(`Compress ${selectedFiles.length} selected image(s)?`)) return;
+
+    setBulkBusy(true);
+    try {
+      const tasks = selectedFiles
+        .filter(file => file.type === 'file')
+        .map(file => removeBackground(file.relativePath));
+      await Promise.all(tasks);
+      clearSelection();
+      await refreshAll();
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkMergePdfs = async () => {
+    if (selectedFiles.length < 2) {
+      alert('Select at least 2 PDF files to merge.');
+      return;
+    }
+
+    const outputName = prompt('Merged PDF name:', 'merged.pdf');
+    if (!outputName) return;
+
+    setBulkBusy(true);
+    try {
+      const sourcePaths = selectedFiles
+        .filter(file => file.type === 'file')
+        .map(file => file.relativePath);
+
+      const res = await fetch('/api/merge-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sourcePaths, destinationPath: currentPath, outputName }),
+      });
+
+      const data = await res.json();
+      if (!data?.success) {
+        alert(data?.error || 'Failed to merge selected PDFs');
+        return;
+      }
+
+      clearSelection();
+      await refreshAll();
+      alert(`Merged PDF created: ${data?.data?.outputName || outputName}`);
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -212,6 +331,25 @@ export function FileExplorer() {
     return latest?.relativePath || null;
   };
 
+  const loadStorageTree = useCallback(async (targetPath: string = currentPath) => {
+    setStorageTreeLoading(true);
+    setStorageTreeError(null);
+    const result = await fetchStorageDetails(targetPath || '/');
+    if (result?.success && result?.data) {
+      setStorageTreeData(result.data);
+    } else {
+      setStorageTreeData(null);
+      setStorageTreeError(result?.error || 'Failed to load storage visualization');
+    }
+    setStorageTreeLoading(false);
+  }, [currentPath, fetchStorageDetails]);
+
+  useEffect(() => {
+    if (featureMode === 'storage') {
+      loadStorageTree(currentPath);
+    }
+  }, [featureMode, currentPath, loadStorageTree]);
+
   const handlePaletteAction = useCallback(async (action: string, params?: any) => {
     switch (action) {
       case 'create_folder':
@@ -273,6 +411,9 @@ export function FileExplorer() {
         onNavigateTo={handleNavigateTo}
         onToggleAi={() => setIsAiOpen(!isAiOpen)}
         isAiOpen={isAiOpen}
+        recentFiles={recentFiles}
+        frequentFiles={frequentFiles}
+        onFileClick={handleOpenFile}
       />
       
       <div className="flex-1 flex flex-col relative bg-white dark:bg-[#0a0a0a] rounded-tl-xl shadow-lg border-l border-t border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -280,6 +421,11 @@ export function FileExplorer() {
           currentPath={currentPath}
           onNavigateUp={navigateUp}
           onNavigateTo={handleNavigateTo}
+          goBack={goBack}
+          goForward={goForward}
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          recentVisitedFolders={recentVisitedFolders}
           viewMode={viewMode}
           setViewMode={setViewMode}
           searchQuery={searchQuery}
@@ -297,6 +443,18 @@ export function FileExplorer() {
         <input type="file" multiple ref={fileInputRef} className="hidden" onChange={handleFileChange} />
 
         {loading && <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 animate-pulse z-50"></div>}
+
+        {featureMode === 'files' && selectedFiles.length > 0 && (
+          <BulkActionsBar
+            selectedFiles={selectedFiles}
+            isBusy={bulkBusy}
+            onMove={handleBulkMove}
+            onDelete={handleBulkDelete}
+            onCompressImages={handleBulkCompressImages}
+            onMergePdfs={handleBulkMergePdfs}
+            onClearSelection={clearSelection}
+          />
+        )}
         
         {error && (
           <div className="m-4 p-3 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-md border border-red-200 dark:border-red-900/50 flex justify-between">
@@ -358,6 +516,36 @@ export function FileExplorer() {
                   handleNavigateTo(folderPath, fileName);
                 }}
               />
+            ) : featureMode === 'storage' ? (
+              <div className="relative h-full bg-white dark:bg-[#0a0a0a]">
+                {storageTreeLoading && (
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+                    Loading storage visualization...
+                  </div>
+                )}
+
+                {!storageTreeLoading && storageTreeError && (
+                  <div className="h-full p-4">
+                    <div className="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 p-3 text-sm flex items-center justify-between">
+                      <span>{storageTreeError}</span>
+                      <button
+                        onClick={() => loadStorageTree(currentPath)}
+                        className="ml-3 px-2 py-1 rounded bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 transition-colors"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {!storageTreeLoading && !storageTreeError && storageTreeData && (
+                  <StorageTreemap
+                    data={storageTreeData}
+                    onClose={() => setFeatureMode('files')}
+                    onNavigateTo={handleNavigateTo}
+                  />
+                )}
+              </div>
             ) : (
               <FileView 
                 files={filteredFiles}
@@ -368,6 +556,8 @@ export function FileExplorer() {
                 onContextMenu={handleContextMenu}
                 highlightedId={highlightedFile}
                 onFileOpen={handleOpenFile}
+                onQuickRename={handleQuickRename}
+                onQuickDelete={handleQuickDelete}
               />
             )}
            </div>

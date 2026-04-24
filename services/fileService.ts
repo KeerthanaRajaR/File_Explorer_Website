@@ -204,6 +204,62 @@ export async function browseDirectory(targetPath: string) {
   }
 }
 
+export async function getHierarchicalStorageData(targetPath: string = '/') {
+  const absolutePath = resolveSafePath(targetPath);
+  if (!absolutePath) return fail('INVALID_PATH');
+
+  async function walk(dir: string): Promise<any> {
+    const name = path.basename(dir) || 'root';
+    const relativePath = getRelativePath(dir);
+    
+    try {
+      const entries = await fsp.readdir(dir, { withFileTypes: true });
+      const children: any[] = [];
+      let size = 0;
+
+      for (const entry of entries) {
+        const full = path.join(dir, entry.name);
+        try {
+          if (entry.isDirectory()) {
+            const childDir = await walk(full);
+            children.push(childDir);
+            size += childDir.size;
+          } else {
+            const stats = await fsp.stat(full);
+            children.push({
+              name: entry.name,
+              relativePath: getRelativePath(full),
+              size: stats.size,
+              type: 'file',
+              extension: path.extname(entry.name)
+            });
+            size += stats.size;
+          }
+        } catch (e) {
+          // ignore stat errors for specific files
+        }
+      }
+
+      return {
+        name,
+        relativePath,
+        size,
+        type: 'folder',
+        children: children.sort((a, b) => b.size - a.size)
+      };
+    } catch (err) {
+      return { name, relativePath, size: 0, type: 'folder', children: [] };
+    }
+  }
+
+  try {
+    const data = await walk(absolutePath);
+    return succeed(data);
+  } catch (err) {
+    return fail('FAILED_TO_GET_HIERARCHICAL_DATA');
+  }
+}
+
 export async function getStorageInfo() {
   try {
     const rootPath = resolveSafePath('/');

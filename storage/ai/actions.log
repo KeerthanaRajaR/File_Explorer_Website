@@ -32,3 +32,6 @@
 {"action":{"type":"move_files","targets":["/Downloads/Keerthana"],"destination":"/Videos","requiresConfirmation":false},"success":true,"timestamp":"2026-04-09T11:14:51.721Z"}
 {"action":{"type":"create_folder","targets":["/Videos/pic"],"destination":"/Videos/pic","requiresConfirmation":false},"success":true,"timestamp":"2026-04-09T11:15:41.327Z"}
 {"action":{"type":"delete_files","targets":["/Videos/Keerthana"],"requiresConfirmation":false},"success":true,"timestamp":"2026-04-09T11:16:14.894Z"}
+{"action":{"type":"delete_files","targets":["/Documents/pic"],"requiresConfirmation":false},"success":true,"timestamp":"2026-04-21T12:37:12.508Z"}
+{"action":{"type":"delete_files","targets":["/Downloads/docs"],"requiresConfirmation":false},"success":true,"timestamp":"2026-04-21T13:08:46.793Z"}
+{"action":{"type":"delete_files","targets":["/Documents/application.pdf"],"requiresConfirmation":false},"success":true,"timestamp":"2026-04-21T13:38:23.161Z"}

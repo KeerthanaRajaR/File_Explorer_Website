@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import fsp from 'fs/promises';
 import path from 'path';
 import { getBaseRoot } from '@/lib/server/pathUtils';
+import { logStepError, logStepStart, logStepSuccess, startAgentRun } from '@/lib/agentControl/logger';
+import { getGroqChatCompletion } from '@/lib/ai/groq';
 
 // Simulated Embedded Semantic Engine & Metadata Database
 const mockTags: Record<string, string[]> = {
@@ -13,8 +15,32 @@ const mockTags: Record<string, string[]> = {
 };
 
 export async function POST(req: Request) {
+   let runId: string | undefined;
+   const stepName = 'chat_message';
+   let stepClosed = false;
+
+   const respond = async (payload: Record<string, unknown>, status: number = 200, cost: number = 0) => {
+      if (runId && !stepClosed) {
+         await logStepSuccess(runId, stepName, {
+            status,
+            success: payload.success ?? true,
+         }, cost);
+         stepClosed = true;
+      }
+
+      return NextResponse.json({ ...payload, run_id: runId ?? null }, { status });
+   };
+
   try {
     const { message, history = [] } = await req.json();
+      runId = await startAgentRun(typeof message === 'string' ? message : 'chat_message');
+      if (runId) {
+         await logStepStart(runId, stepName, {
+            message: typeof message === 'string' ? message : '',
+            historyLength: Array.isArray(history) ? history.length : 0,
+         }, 'chat');
+      }
+
     const query = message.toLowerCase();
     const root = getBaseRoot();
     
@@ -54,13 +80,13 @@ export async function POST(req: Request) {
     // 1. Conversational Fillers Layer
     const cleanQuery = query.replace(/[^\w\s]/g, '').trim();
     if (['hi', 'hello', 'hey', 'greetings', 'sup'].includes(cleanQuery)) {
-       return NextResponse.json({
+       return respond({
           success: true,
           reply: "Hello! 👋 I am your advanced AI Agent. I can perform semantic searches, contextual summaries, and bulk operations. How can I assist your workflow today?"
        });
     }
     if (['thanks', 'thank you', 'ok', 'okay', 'got it'].includes(cleanQuery)) {
-       return NextResponse.json({
+       return respond({
           success: true,
           reply: "Anytime! Let me know if you need any other documents organized or summarized."
        });
@@ -69,7 +95,7 @@ export async function POST(req: Request) {
     // 2. Action Layer (Move/Delete/Rename)
     if (query.includes('delete') || query.includes('remove') || query.includes('erase')) {
       const isDuplicate = query.includes('duplicate');
-      return NextResponse.json({ 
+         return respond({ 
         success: true, 
         reply: `⚠️ SAFETY CHECK: You are asking an AI to perform destructive operations. Are you absolutely sure you want to permanently delete ${isDuplicate ? 'all identified duplicate images' : 'these items'}?`, 
         action: { type: 'delete', targets: ['/target_images'] } 
@@ -77,7 +103,7 @@ export async function POST(req: Request) {
     }
 
     if (query.includes('move') || query.includes('organize')) {
-      return NextResponse.json({ 
+         return respond({ 
         success: true, 
         reply: `⚠️ I have formulated a plan to move all loose PDF documents into the /Documents folder. Should I execute this reorganization?`, 
         action: { type: 'move',  targets: ['all_pdfs'] } 
@@ -116,7 +142,7 @@ export async function POST(req: Request) {
        }
 
        if (!resolvedFile || resolvedFile.length < 2) {
-          return NextResponse.json({
+          return respond({
             success: true,
             reply: `I'm not sure which file you mean! Please search for a file first or specify its name.`
           });
@@ -124,7 +150,7 @@ export async function POST(req: Request) {
 
        const isBrief = query.includes('briefly') || query.includes('short');
 
-       return NextResponse.json({
+          return respond({
           success: true,
           reply: isBrief 
             ? `**Brief Overview: ${resolvedFile}**\n\nThe document heavily profiles multi-modal UI integrations and intelligent semantic conversational systems. It maps directly to your prior Q3 sprint timelines.`
@@ -155,23 +181,42 @@ export async function POST(req: Request) {
     if (searchTarget) {
       const files = await searchFiles(searchTarget);
       if (files.length > 0) {
-         return NextResponse.json({ 
+             return respond({ 
            success: true, 
            reply: `Found ${files.length} file(s) conceptually matching your intent for "**${query}**":`, 
            files: files.slice(0, 5) // Limits UI clutter
          });
       } else {
-         return NextResponse.json({ success: true, reply: `I semantically searched your entire database but couldn't find anything matching the intent of "**${query}**".` });
+             return respond({ success: true, reply: `I semantically searched your entire database but couldn't find anything matching the intent of "**${query}**".` });
       }
     } 
 
-    // Default conversational fallback
-    return NextResponse.json({
-       success: true,
-       reply: "I am ready and listening. As a powerful AI Agent, I understand deep semantic contexts."
-    });
+    // Default conversational fallback - Use Groq for AI response
+      try {
+        const systemPrompt = `You are a helpful File Explorer AI Assistant. Answer the user's question concisely and helpfully. 
+If they ask about file operations (delete, move, organize), explain what you would do but ask for confirmation before taking action.`;
+        
+        const groqResponse = await getGroqChatCompletion(message, systemPrompt);
+        
+        return respond({
+          success: true,
+          reply: groqResponse.content,
+          tokens: groqResponse.tokens
+        }, 200, groqResponse.cost);
+      } catch (groqErr) {
+        console.error('Groq error:', groqErr);
+        return respond({
+          success: true,
+          reply: "I am ready and listening. As a powerful AI Agent, I understand deep semantic contexts."
+        });
+      }
 
-  } catch (err: any) {
-    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+   } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'CHAT_REQUEST_FAILED';
+      if (runId && !stepClosed) {
+         await logStepError(runId, stepName, message);
+         stepClosed = true;
+      }
+      return NextResponse.json({ success: false, error: message, run_id: runId ?? null }, { status: 500 });
   }
 }

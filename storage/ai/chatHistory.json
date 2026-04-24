@@ -1,24 +1,14 @@
 [
   {
-    "id": "1775971472748",
+    "id": "1776778408290",
     "role": "user",
-    "content": "heelo"
+    "content": "search resume file"
   },
   {
-    "id": "1775971473449",
+    "id": "1776778426831",
     "role": "assistant",
-    "content": "I couldn't find any documents matching your search for \"heelo\". Try different keywords or check if the files are uploaded.",
-    "files": []
-  },
-  {
-    "id": "1775971482153",
-    "role": "user",
-    "content": "search the resume file"
-  },
-  {
-    "id": "1775971483163",
-    "role": "assistant",
-    "content": "Based on your search for \"search the resume file\", I found two highly relevant results:\n\nThere are two identical PDF files, \"keerthana_resume.pdf\", located in different directories: \"/Documents/keerthana_resume.pdf\" (44% relevance) and \"/Downloads/keerthana_resume.pdf\" (44% relevance).",
+    "content": "Based on your search query \"search resume file,\" we found two matching PDF files:\n\nOne exact match:\n- **keerthana_resume.pdf (**/Documents/keerthana_resume.pdf** and **/Downloads/keerthana_resume.pdf**) appears to be a resume belonging to a candidate with the name Keerthana R, highlighting her experience as a Full Stack Developer and AI Engineer.",
+    "runId": "07c27cc9-f111-4614-9df5-8fa249b36161",
     "files": [
       {
         "name": "keerthana_resume.pdf",
@@ -29,5 +19,36 @@
         "path": "/Downloads/keerthana_resume.pdf"
       }
     ]
+  },
+  {
+    "id": "1776778701402",
+    "role": "user",
+    "content": "delete /Documents/application.pdf"
+  },
+  {
+    "id": "1776778701611",
+    "role": "assistant",
+    "content": "Found 1 file(s). Are you sure you want to move them to Trash?",
+    "runId": "b6d6d4c8-d600-43e7-b118-abdc9b012b4d",
+    "files": [
+      {
+        "name": "application.pdf",
+        "path": "/Documents/application.pdf"
+      }
+    ],
+    "action": {
+      "type": "delete_files",
+      "targets": [
+        "/Documents/application.pdf"
+      ],
+      "requiresConfirmation": true,
+      "confirmed": true
+    }
+  },
+  {
+    "id": "1776778704242",
+    "role": "assistant",
+    "content": "Action completed successfully.",
+    "runId": "cfac352d-fd5c-46f6-9687-451360379ac3"
   }
 ]

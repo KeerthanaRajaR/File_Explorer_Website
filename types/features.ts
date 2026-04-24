@@ -1,3 +1,5 @@
+import { FileNode } from './index';
+
 export type DuplicateReason = 'hash' | 'name';
 
 export type DuplicateFileEntry = {
@@ -23,3 +25,8 @@ export type TrashEntry = {
   size: number;
   type: 'file' | 'folder';
 };
+
+export interface FileStats extends FileNode {
+  lastOpened: number;
+  openCount: number;
+}

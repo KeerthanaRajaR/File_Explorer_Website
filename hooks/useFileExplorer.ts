@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { FileNode, StorageInfo } from '@/types';
 import { buildSmartFileGroups, SmartFileGroup } from '@/lib/features/importance';
 import { HistoryService } from '@/services/history.service';
@@ -25,9 +25,18 @@ export interface ExplorerHistoryState {
 }
 
 const historyService = new HistoryService();
+const MAX_NAV_HISTORY = 100;
+const MAX_RECENT_FOLDERS = 8;
+
+const normalizePath = (path: string): string => {
+  if (!path) return '/';
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  const cleaned = normalized.replace(/\/+/g, '/').replace(/\/$/, '');
+  return cleaned === '' ? '/' : cleaned;
+};
 
 export function useFileExplorer(initialPath: string = '/') {
-  const [currentPath, setCurrentPath] = useState(initialPath);
+  const [currentPath, setCurrentPath] = useState(normalizePath(initialPath));
   const [files, setFiles] = useState<FileNode[]>([]);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,6 +51,12 @@ export function useFileExplorer(initialPath: string = '/') {
     canRedo: false,
     lastUndo: null,
     lastRedo: null,
+  });
+
+  // Path Navigation History
+  const [navigationState, setNavigationState] = useState<{ history: string[]; currentIndex: number }>({
+    history: [normalizePath(initialPath)],
+    currentIndex: 0,
   });
 
   const refreshHistoryState = useCallback(() => {
@@ -102,6 +117,16 @@ export function useFileExplorer(initialPath: string = '/') {
     }
   }, []);
 
+  const fetchStorageDetails = useCallback(async (path: string = '/') => {
+    try {
+      const res = await fetch(`/api/storage/details?path=${encodeURIComponent(path)}`);
+      const data = await res.json();
+      return data;
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }, []);
+
   useEffect(() => {
     fetchFiles(currentPath);
     fetchStorage();
@@ -117,7 +142,65 @@ export function useFileExplorer(initialPath: string = '/') {
     refreshHistoryState();
   }, [refreshHistoryState, files, currentPath, clipboard, uploadProgress, duplicateGroups, trashEntries, smartGroups]);
 
-  const navigateTo = (path: string) => setCurrentPath(path);
+  const navigateTo = useCallback((path: string, isFromHistory: boolean = false) => {
+    const nextPath = normalizePath(path);
+    setCurrentPath(nextPath);
+
+    if (isFromHistory) return;
+
+    setNavigationState(prev => {
+      const nextHistory = prev.history.slice(0, prev.currentIndex + 1);
+      if (nextHistory[nextHistory.length - 1] === nextPath) {
+        return prev;
+      }
+
+      const pushed = [...nextHistory, nextPath];
+      const trimmed = pushed.slice(-MAX_NAV_HISTORY);
+      return {
+        history: trimmed,
+        currentIndex: trimmed.length - 1,
+      };
+    });
+  }, []);
+
+  const goBack = useCallback(() => {
+    setNavigationState(prev => {
+      if (prev.currentIndex <= 0) return prev;
+      const targetIndex = prev.currentIndex - 1;
+      setCurrentPath(prev.history[targetIndex]);
+      return {
+        ...prev,
+        currentIndex: targetIndex,
+      };
+    });
+  }, []);
+
+  const goForward = useCallback(() => {
+    setNavigationState(prev => {
+      if (prev.currentIndex >= prev.history.length - 1) return prev;
+      const targetIndex = prev.currentIndex + 1;
+      setCurrentPath(prev.history[targetIndex]);
+      return {
+        ...prev,
+        currentIndex: targetIndex,
+      };
+    });
+  }, []);
+
+  const recentVisitedFolders = useMemo(() => {
+    const result: string[] = [];
+    const seen = new Set<string>();
+
+    for (let i = navigationState.history.length - 1; i >= 0; i -= 1) {
+      const path = navigationState.history[i];
+      if (!path || path === currentPath || seen.has(path)) continue;
+      seen.add(path);
+      result.push(path);
+      if (result.length >= MAX_RECENT_FOLDERS) break;
+    }
+
+    return result;
+  }, [navigationState.history, currentPath]);
 
   const getDirName = (targetPath: string): string => {
     const normalized = targetPath.replace(/\/+$/, '') || '/';
@@ -480,6 +563,12 @@ export function useFileExplorer(initialPath: string = '/') {
     permanentlyDeleteTrashItem,
     undo,
     redo,
+    goBack,
+    goForward,
+    canGoBack: navigationState.currentIndex > 0,
+    canGoForward: navigationState.currentIndex < navigationState.history.length - 1,
+    recentVisitedFolders,
+    fetchStorageDetails,
     refresh: fetchFiles,
     refreshAll: async () => {
       await Promise.all([fetchFiles(), fetchStorage(), fetchDuplicates(), fetchTrash()]);

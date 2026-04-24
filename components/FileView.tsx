@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { FileNode } from '@/types';
 import { 
   Folder, File as FileIcon, Image as ImageIcon, FileText, 
-  Archive, FileAudio, FileVideo, FileSpreadsheet, FileCode, Check
+  Archive, FileAudio, FileVideo, FileSpreadsheet, FileCode, Eye, Edit2, Trash2
 } from 'lucide-react';
 
 interface FileViewProps {
@@ -16,9 +16,11 @@ interface FileViewProps {
   onContextMenu: (e: React.MouseEvent, file: FileNode) => void;
   highlightedId?: string | null;
   onFileOpen: (file: FileNode) => void;
+  onQuickRename: (file: FileNode) => void;
+  onQuickDelete: (file: FileNode) => void;
 }
 
-export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelection, onContextMenu, highlightedId, onFileOpen }: FileViewProps) {
+export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelection, onContextMenu, highlightedId, onFileOpen, onQuickRename, onQuickDelete }: FileViewProps) {
   
   // Track image load errors to fallback to icon
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
@@ -195,6 +197,40 @@ export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelec
                   className="rounded text-blue-500 focus:ring-blue-500 bg-gray-100 border-gray-300 shadow-sm"
                 />
               </div>
+
+              <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 pointer-events-none group-hover:pointer-events-auto">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFileOpen(file);
+                  }}
+                  className="p-1.5 rounded-md bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-white dark:hover:bg-gray-900 transition-colors"
+                  title="Preview"
+                >
+                  <Eye size={14} className="text-blue-600 dark:text-blue-400" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onQuickRename(file);
+                  }}
+                  className="p-1.5 rounded-md bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-white dark:hover:bg-gray-900 transition-colors"
+                  title="Rename"
+                >
+                  <Edit2 size={14} className="text-gray-600 dark:text-gray-300" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onQuickDelete(file);
+                  }}
+                  className="p-1.5 rounded-md bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 size={14} className="text-red-600 dark:text-red-400" />
+                </button>
+              </div>
+
               <div className="mb-3 h-16 w-16 flex items-center justify-center transform group-hover:scale-105 transition-transform">
                 {getIcon(file)}
               </div>

@@ -1,5 +1,59 @@
 [
   {
+    "id": "1777038834685-745pkt",
+    "name": "video.mp3",
+    "originalPath": "/Videos/video.mp3",
+    "trashedPath": "/Trash/video.mp3",
+    "deletedAt": "2026-04-24T13:53:54.685Z",
+    "size": 3468673,
+    "type": "file"
+  },
+  {
+    "id": "1777038613688-arckgr",
+    "name": "Screenshot from 2026-04-06 14-18-12_nobg.png",
+    "originalPath": "/Pictures/Screenshot from 2026-04-06 14-18-12_nobg.png",
+    "trashedPath": "/Trash/Screenshot from 2026-04-06 14-18-12_nobg.png",
+    "deletedAt": "2026-04-24T13:50:13.688Z",
+    "size": 101524,
+    "type": "file"
+  },
+  {
+    "id": "1777038609778-nde7ib",
+    "name": "image_nobg.jpeg",
+    "originalPath": "/Pictures/image_nobg.jpeg",
+    "trashedPath": "/Trash/image_nobg.jpeg",
+    "deletedAt": "2026-04-24T13:50:09.779Z",
+    "size": 309854,
+    "type": "file"
+  },
+  {
+    "id": "1776778703152-hwjjgi",
+    "name": "application.pdf",
+    "originalPath": "/Documents/application.pdf",
+    "trashedPath": "/Trash/application.pdf",
+    "deletedAt": "2026-04-21T13:38:23.152Z",
+    "size": 1204837,
+    "type": "file"
+  },
+  {
+    "id": "1776776926781-bo7t4w",
+    "name": "docs",
+    "originalPath": "/Downloads/docs",
+    "trashedPath": "/Trash/docs",
+    "deletedAt": "2026-04-21T13:08:46.782Z",
+    "size": 4096,
+    "type": "folder"
+  },
+  {
+    "id": "1776775032498-mb7n3j",
+    "name": "pic",
+    "originalPath": "/Documents/pic",
+    "trashedPath": "/Trash/pic",
+    "deletedAt": "2026-04-21T12:37:12.498Z",
+    "size": 4096,
+    "type": "folder"
+  },
+  {
     "id": "1776324257202-7ybmr8",
     "name": "Images_folder",
     "originalPath": "/Images_folder",

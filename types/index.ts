@@ -14,3 +14,11 @@ export interface StorageInfo {
 }
 
 export type { FileMeta, StoredFileMeta, ToolAction, ActionPayload } from './ai';
+export type {
+  AgentRunStatus,
+  AgentStepStatus,
+  AgentRunListItem,
+  AgentStep,
+  AgentRunDetail,
+  ReplayResponse,
+} from './agentControl';

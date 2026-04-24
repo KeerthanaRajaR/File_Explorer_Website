@@ -1,8 +1,10 @@
 "use client";
 
 import React from 'react';
-import { StorageInfo } from '@/types';
-import { HardDrive, Cloud, Settings, Moon, Sun, Clock, Star, Home, FileText, Download, Music, Image as ImageIcon, Film, Trash2, Plus, Bot } from 'lucide-react';
+import { StorageInfo, FileNode } from '@/types';
+import { FileStats } from '@/types/features';
+import { HardDrive, Cloud, Settings, Moon, Sun, Clock, Star, Home, FileText, Download, Music, Image as ImageIcon, Film, Trash2, Plus, Bot, Activity } from 'lucide-react';
+import { FileSuggestions } from './suggestions/FileSuggestions';
 
 interface SidebarProps {
   storageInfo: StorageInfo | null;
@@ -12,9 +14,23 @@ interface SidebarProps {
   onNavigateTo?: (path: string) => void;
   onToggleAi?: () => void;
   isAiOpen?: boolean;
+  recentFiles: FileStats[];
+  frequentFiles: FileStats[];
+  onFileClick: (file: FileStats) => void;
 }
 
-export function Sidebar({ storageInfo, toggleDarkMode, isDarkMode, currentPath, onNavigateTo, onToggleAi, isAiOpen }: SidebarProps) {
+export function Sidebar({ 
+  storageInfo, 
+  toggleDarkMode, 
+  isDarkMode, 
+  currentPath, 
+  onNavigateTo, 
+  onToggleAi, 
+  isAiOpen,
+  recentFiles,
+  frequentFiles,
+  onFileClick
+}: SidebarProps) {
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -72,7 +88,7 @@ export function Sidebar({ storageInfo, toggleDarkMode, isDarkMode, currentPath, 
           
           <div className="w-full border-t border-gray-200 dark:border-gray-800 my-2"></div>
           
-          <li className="w-full mb-2">
+           <li className="w-full mb-2">
              <button 
                 onClick={onToggleAi}
                 className={`w-full flex items-center gap-4 px-4 py-2 hover:bg-purple-100 text-purple-700 dark:hover:bg-purple-900/30 dark:text-purple-400 rounded-lg transition-colors shadow-sm border border-transparent hover:border-purple-200 dark:hover:border-purple-800/50 ${isAiOpen ? 'bg-purple-100 border-purple-200 dark:bg-purple-900/40 dark:border-purple-800' : ''}`}
@@ -81,6 +97,16 @@ export function Sidebar({ storageInfo, toggleDarkMode, isDarkMode, currentPath, 
                 <span className="font-semibold">AI Agent</span>
              </button>
           </li>
+
+           <li className="w-full mb-1">
+             <button
+               onClick={() => onNavigateTo?.('/agent-runs')}
+               className="w-full flex items-center gap-4 px-4 py-2 hover:bg-indigo-100 text-indigo-700 dark:hover:bg-indigo-900/30 dark:text-indigo-400 rounded-lg transition-colors shadow-sm border border-transparent hover:border-indigo-200 dark:hover:border-indigo-800/50"
+             >
+               <Activity size={18} />
+               <span className="font-semibold">Agent Runs</span>
+             </button>
+           </li>
 
           <div className="w-full border-t border-gray-200 dark:border-gray-800 my-2"></div>
           
@@ -116,6 +142,15 @@ export function Sidebar({ storageInfo, toggleDarkMode, isDarkMode, currentPath, 
           </li>
         </ul>
       </nav>
+      <div className="w-full border-t border-gray-200 dark:border-gray-800 my-2"></div>
+
+      <FileSuggestions 
+        recentFiles={recentFiles} 
+        frequentFiles={frequentFiles} 
+        onFileClick={onFileClick} 
+      />
+
+      <div className="flex-1"></div>
 
       <div className="p-4 border-t border-gray-200 dark:border-gray-800">
         <div className="flex items-center justify-between mb-2">

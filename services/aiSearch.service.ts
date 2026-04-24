@@ -2,7 +2,7 @@ import { generateEmbedding } from '@/lib/ai/embedding';
 import { AiStorage } from '@/lib/ai/storage';
 import { cosineSimilarity } from '@/lib/ai/similarity';
 import { FileMeta } from '@/types/ai';
-import { getGroqChatCompletion } from '@/lib/ai/groq';
+import { getGroqChatCompletion, type GroqResponse } from '@/lib/ai/groq';
 
 export class AiSearchService {
   private static greetings = ['hi', 'hello', 'hey', 'greetings', 'sup', 'good morning', 'good afternoon', 'good evening', 'hola'];
@@ -89,32 +89,54 @@ export class AiSearchService {
 
   /**
    * Generates a conversational summary of search results using Groq.
+   * Returns both the summary and the cost for logging.
    */
-  static async genterateSummary(query: string, results: any[]) {
-    if (results.length === 0) {
-      return `I couldn't find any documents matching your search for "${query}". Try different keywords or check if the files are uploaded.`;
-    }
+  static async genterateSummary(query: string, results: any[]): Promise<{summary: string, cost: number}> {
+    const fileList = results.length > 0 
+      ? results.map(r => {
+          const contentSnippet = r.content ? `\n   CONTENT PREVIEW: ${r.content.slice(0, 1000)}...` : '';
+          return `- ${r.name} (${r.path}) [relevance: ${Math.round(r.score * 100)}%]${contentSnippet}`;
+        }).join('\n')
+      : 'No files found';
 
-    const fileList = results.map(r => {
-      const contentSnippet = r.content ? `\n   CONTENT PREVIEW: ${r.content.slice(0, 1000)}...` : '';
-      return `- ${r.name} (${r.path}) [relevance: ${Math.round(r.score * 100)}%]${contentSnippet}`;
-    }).join('\n');
-    const prompt = `The user searched for: "${query}". 
+    const prompt = results.length > 0
+      ? `The user searched for: "${query}". 
 I found these matching files:
 ${fileList}
 
 Provide a brief, helpful summary of these results (1-2 sentences). 
 CRITICAL: Only mention files that are highly relevant to the search query. If a file seems unrelated despite the similarity score, ignore it or mention it only as a possible but unlikely match.
 If there is one clear "exact" match, focus primarily on that.
-Be concise and professional.`;
+Be concise and professional.`
+      : `The user searched for: "${query}". No matching files were found. Provide a helpful response suggesting they try different keywords or check if files are uploaded. Keep it to 1-2 sentences.`;
 
     try {
       if (this.isGreeting(query)) {
-        return "Hello! 👋 I'm your AI Assistant. I can help you find files using semantic search. How can I help you today?";
+        console.log('[Search] Detected greeting, calling Groq anyway for proper response');
+        const greetingPrompt = `The user said: "${query}". Respond as a friendly AI file explorer assistant. Keep it brief (1-2 sentences).`;
+        const response: GroqResponse = await getGroqChatCompletion(greetingPrompt, "You are a helpful File Explorer AI Assistant powered by Groq.");
+        return {
+          summary: response.content,
+          cost: response.cost
+        };
       }
-      return await getGroqChatCompletion(prompt, "You are a helpful File Explorer AI Assistant powered by Groq.");
+      
+      console.log('[Search] Calling Groq API with prompt length:', prompt.length);
+      const response: GroqResponse = await getGroqChatCompletion(prompt, "You are a helpful File Explorer AI Assistant powered by Groq.");
+      console.log('[Search] Groq response - tokens:', response.tokens, 'cost:', response.cost);
+      
+      return {
+        summary: response.content,
+        cost: response.cost
+      };
     } catch (e) {
-      return `Found ${results.length} files matching your search.`;
+      console.error('[Search] Error in genterateSummary:', e);
+      return {
+        summary: results.length > 0 
+          ? `Found ${results.length} files matching your search.`
+          : `Couldn't find files matching "${query}". Try different keywords.`,
+        cost: 0
+      };
     }
   }
 }

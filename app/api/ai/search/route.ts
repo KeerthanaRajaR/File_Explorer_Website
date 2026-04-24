@@ -6,6 +6,7 @@ import { detectIntent } from '@/lib/ai/intent';
 import { ActionPayload } from '@/types/ai';
 import { getBaseRoot, resolveSafePath } from '@/lib/server/pathUtils';
 import { summarizeFileByPath } from '@/lib/ai/fileSummary';
+import { logStepError, logStepStart, logStepSuccess, startAgentRun } from '@/lib/agentControl/logger';
 
 type SearchResult = {
   path: string;
@@ -396,13 +397,38 @@ const buildActionMessage = (action: ActionPayload): string => {
 };
 
 export async function POST(req: NextRequest) {
+  let runId: string | undefined;
+  const stepName = 'process_query';
+  let stepClosed = false;
+
+  const respond = async (payload: Record<string, unknown>, status: number = 200) => {
+    if (runId && !stepClosed) {
+      await logStepSuccess(runId, stepName, {
+        status,
+        type: payload.type ?? 'message',
+        success: payload.success ?? true,
+      }, 0.001);
+      stepClosed = true;
+    }
+
+    return NextResponse.json({ ...payload, run_id: runId ?? null }, { status });
+  };
+
   try {
     const body = (await req.json()) as RequestBody;
     const query = body.query;
     const currentPath = body.currentPath;
 
+    runId = await startAgentRun(query || 'EMPTY_QUERY');
+    if (runId) {
+      await logStepStart(runId, stepName, {
+        query: query || '',
+        currentPath: currentPath || '/',
+      }, 'search');
+    }
+
     if (!query) {
-      return NextResponse.json({ success: false, data: null, error: 'Query is required' }, { status: 400 });
+      return respond({ success: false, data: null, error: 'Query is required' }, 400);
     }
 
     const normalizedQuery = query.toLowerCase();
@@ -415,7 +441,7 @@ export async function POST(req: NextRequest) {
       const target = bestTargets[0];
 
       if (!target) {
-        return NextResponse.json({
+        return respond({
           success: true,
           type: 'message',
           data: [],
@@ -430,16 +456,16 @@ export async function POST(req: NextRequest) {
           ? `\n\nKey points:\n${explained.keyPoints.map((point) => `• ${point}`).join('\n')}`
           : '';
 
-        return NextResponse.json({
+        return respond({
           success: true,
           type: 'message',
           data: [{ path: target, name: explained.fileName, score: 1 }],
           summary: `Explanation for ${explained.fileName}:\n\n${explained.summary}${keyPointsBlock}`,
           error: null,
         });
-      } catch (explainError: any) {
-        const message = explainError?.message || 'FAILED_TO_EXPLAIN_FILE';
-        return NextResponse.json({
+      } catch (explainError: unknown) {
+        const message = explainError instanceof Error ? explainError.message : 'FAILED_TO_EXPLAIN_FILE';
+        return respond({
           success: true,
           type: 'message',
           data: [{ path: target, name: target.split('/').pop() || target, score: 1 }],
@@ -454,7 +480,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (AiSearchService.isGreeting(query)) {
-      return NextResponse.json({
+      return respond({
         success: true,
         type: 'message',
         data: [],
@@ -473,7 +499,6 @@ export async function POST(req: NextRequest) {
       const ragResults = preferCurrentPath(rawRagResults.map(result => result.path), currentPath)
         .map(path => rawRagResults.find(result => result.path === path)!)
         .filter(Boolean);
-      const ragPaths = ragResults.map(result => result.path);
       let action: ActionPayload | null = null;
 
       if (intent.type === 'create_folder') {
@@ -488,7 +513,7 @@ export async function POST(req: NextRequest) {
 
       if (intent.type === 'create_file') {
         if (!intent.destination) {
-          return NextResponse.json({
+          return respond({
             success: true,
             type: 'message',
             data: [],
@@ -521,7 +546,7 @@ export async function POST(req: NextRequest) {
         };
 
         if (action.targets.length === 0) {
-          return NextResponse.json({
+          return respond({
             success: true,
             type: 'message',
             data: previewData,
@@ -530,7 +555,7 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        return NextResponse.json({
+        return respond({
           success: true,
           type: 'action',
           requiresConfirmation: true,
@@ -543,7 +568,7 @@ export async function POST(req: NextRequest) {
 
       if (intent.type === 'move_files') {
         if (!intent.destination) {
-          return NextResponse.json({
+          return respond({
             success: true,
             type: 'message',
             data: ragResults,
@@ -562,7 +587,7 @@ export async function POST(req: NextRequest) {
 
       if (intent.type === 'rename_file') {
         if (!intent.newName) {
-          return NextResponse.json({
+          return respond({
             success: true,
             type: 'message',
             data: ragResults,
@@ -577,7 +602,7 @@ export async function POST(req: NextRequest) {
         )[0] || null;
 
         if (!target) {
-          return NextResponse.json({
+          return respond({
             success: true,
             type: 'message',
             data: [],
@@ -601,7 +626,7 @@ export async function POST(req: NextRequest) {
         )[0] || null;
 
         if (!target) {
-          return NextResponse.json({
+          return respond({
             success: true,
             type: 'message',
             data: [],
@@ -613,7 +638,7 @@ export async function POST(req: NextRequest) {
         const hasReplacement = Boolean(intent.replaceFrom && typeof intent.replaceTo === 'string');
 
         if ((typeof intent.fileContent !== 'string' || intent.fileContent.length === 0) && !hasReplacement) {
-          return NextResponse.json({
+          return respond({
             success: true,
             type: 'message',
             data: [],
@@ -638,7 +663,7 @@ export async function POST(req: NextRequest) {
           currentPath
         )[0] || null;
         if (!target) {
-          return NextResponse.json({
+          return respond({
             success: true,
             type: 'message',
             data: [],
@@ -653,7 +678,7 @@ export async function POST(req: NextRequest) {
           requiresConfirmation: false,
         };
 
-        return NextResponse.json({
+        return respond({
           success: true,
           type: 'action',
           requiresConfirmation: false,
@@ -665,7 +690,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (!action) {
-        return NextResponse.json({
+        return respond({
           success: true,
           type: 'message',
           data: [],
@@ -675,7 +700,7 @@ export async function POST(req: NextRequest) {
       }
 
       if ((action.type !== 'create_folder' && action.type !== 'create_file') && action.targets.length === 0) {
-        return NextResponse.json({
+        return respond({
           success: true,
           type: 'message',
           data: ragResults,
@@ -684,7 +709,7 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      return NextResponse.json({
+      return respond({
         success: true,
         type: 'action',
         requiresConfirmation: true,
@@ -696,9 +721,18 @@ export async function POST(req: NextRequest) {
     }
 
     const results = (await AiSearchService.search(query)) as SearchResult[];
-    const summary = await AiSearchService.genterateSummary(query, results);
+    const { summary, cost } = await AiSearchService.genterateSummary(query, results);
 
-    return NextResponse.json({
+    if (runId && !stepClosed) {
+      await logStepSuccess(runId, stepName, {
+        type: 'search',
+        resultsCount: results.length,
+        summary,
+      }, cost);
+      stepClosed = true;
+    }
+
+    return respond({
       success: true,
       type: 'search',
       data: results,
@@ -707,10 +741,16 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     console.error('AI Search API Error:', err);
+    if (runId && !stepClosed) {
+      await logStepError(runId, stepName, err instanceof Error ? err.message : 'Search failed');
+      stepClosed = true;
+    }
+
     return NextResponse.json({
       success: false,
       data: null,
-      error: err instanceof Error ? err.message : 'Search failed'
+      error: err instanceof Error ? err.message : 'Search failed',
+      run_id: runId ?? null,
     }, { status: 500 });
   }
 }

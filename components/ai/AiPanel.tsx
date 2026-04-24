@@ -6,6 +6,7 @@ import { ActionPayload } from '@/types/ai';
 
 const CHAT_STORAGE_KEY = 'file-explorer-ai-chat-v1';
 const CHAT_ARCHIVE_STORAGE_KEY = 'file-explorer-ai-chat-archive-v1';
+const CHAT_RUN_IDS_STORAGE_KEY = 'file-explorer-ai-chat-run-ids-v1';
 const MAX_PERSISTED_MESSAGES = 150;
 const MAX_ARCHIVED_CHATS = 20;
 const CHAT_HISTORY_API = '/api/ai/history';
@@ -22,6 +23,7 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  runId?: string;
   files?: Array<{ name: string; path: string }>;
   action?: ActionPayload & { confirmed?: boolean };
 }
@@ -187,6 +189,25 @@ export function AiPanel({ isOpen, onClose, onNavigate, onRefresh, currentPath }:
     };
   }, [messages, archivedChats, isHydrated]);
 
+  const appendRunId = (runId?: string) => {
+    if (!runId) return;
+
+    try {
+      const raw = window.localStorage.getItem(CHAT_RUN_IDS_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      const ids = Array.isArray(parsed)
+        ? parsed.filter((item): item is string => typeof item === 'string')
+        : [];
+
+      if (!ids.includes(runId)) {
+        ids.push(runId);
+        window.localStorage.setItem(CHAT_RUN_IDS_STORAGE_KEY, JSON.stringify(ids));
+      }
+    } catch {
+      // ignore localStorage failures
+    }
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
@@ -223,6 +244,15 @@ export function AiPanel({ isOpen, onClose, onNavigate, onRefresh, currentPath }:
         body: JSON.stringify({ query: textToSend, currentPath })
       });
       const data = await res.json();
+      const runId =
+        typeof data?.run_id === 'string'
+          ? data.run_id
+          : typeof data?.runId === 'string'
+            ? data.runId
+            : typeof data?.data?.run_id === 'string'
+              ? data.data.run_id
+              : undefined;
+            appendRunId(runId);
       
       if (data.success) {
         const results = data.data || [];
@@ -235,11 +265,12 @@ export function AiPanel({ isOpen, onClose, onNavigate, onRefresh, currentPath }:
           content: summary || (results.length > 0 
             ? `I found ${results.length} file(s) matching your search:` 
             : `I couldn't find any files matching "${textToSend}".`),
+          runId,
           files: results.map((r: { name: string; path: string }) => ({ name: r.name, path: r.path })),
           action: action ? { ...action, confirmed: action.requiresConfirmation ? false : true } : undefined,
         }]);
       } else {
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Error: ${data.error || 'Search failed'}` }]);
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Error: ${data.error || 'Search failed'}`, runId }]);
       }
     } catch (err) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Network failed.' }]);
@@ -325,6 +356,15 @@ export function AiPanel({ isOpen, onClose, onNavigate, onRefresh, currentPath }:
         });
 
         const data = await res.json();
+        const runId =
+          typeof data?.run_id === 'string'
+            ? data.run_id
+            : typeof data?.runId === 'string'
+              ? data.runId
+              : typeof data?.data?.run_id === 'string'
+                ? data.data.run_id
+                : undefined;
+              appendRunId(runId);
 
         setMessages(prev => prev.map(m => m.id === msgId ? { ...m, action: { ...m.action!, confirmed: true } } : m));
 
@@ -345,7 +385,7 @@ export function AiPanel({ isOpen, onClose, onNavigate, onRefresh, currentPath }:
             onNavigate(toParentPath(payload.targets[0]), toName(payload.targets[0]));
           }
 
-          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Action completed successfully.' }]);
+          setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: 'Action completed successfully.', runId }]);
           return;
         }
 
@@ -353,6 +393,7 @@ export function AiPanel({ isOpen, onClose, onNavigate, onRefresh, currentPath }:
           id: Date.now().toString(),
           role: 'assistant',
           content: `Action failed: ${data.error || data.data?.error || 'FAILED_TO_EXECUTE_ACTION'}`,
+          runId,
         }]);
       } catch {
         setMessages(prev => [...prev, {
@@ -386,6 +427,12 @@ export function AiPanel({ isOpen, onClose, onNavigate, onRefresh, currentPath }:
     setActiveArchiveId(null);
     setMessages([]);
     setInput('');
+
+    try {
+      window.localStorage.removeItem(CHAT_RUN_IDS_STORAGE_KEY);
+    } catch {
+      // ignore localStorage failures
+    }
   };
 
   const userHistory = archivedChats;
@@ -531,6 +578,22 @@ export function AiPanel({ isOpen, onClose, onNavigate, onRefresh, currentPath }:
                         </button>
                       </div>
                     )}
+
+                    {msg.role === 'assistant' ? (
+                      <div className="mt-3">
+                        <button
+                          onClick={() => {
+                            const target = msg.runId
+                              ? `/agent-runs/${encodeURIComponent(msg.runId)}`
+                              : '/agent-runs';
+                            window.open(target, '_blank', 'noopener,noreferrer');
+                          }}
+                          className="text-xs rounded-md bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2.5 py-1.5 hover:bg-indigo-200 dark:hover:bg-indigo-800/40 transition-colors"
+                        >
+                          View Execution
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))
