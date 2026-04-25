@@ -30,3 +30,9 @@ export interface FileStats extends FileNode {
   lastOpened: number;
   openCount: number;
 }
+
+export type Favorite = {
+  path: string;
+  name: string;
+  type: FileNode['type'];
+};

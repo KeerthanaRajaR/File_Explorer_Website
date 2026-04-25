@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useFileExplorer } from '@/hooks/useFileExplorer';
 import { useSelection } from '@/hooks/useSelection';
 import { Sidebar } from './Sidebar';
@@ -8,7 +8,7 @@ import { Toolbar } from './Toolbar';
 import { FileView } from './FileView';
 import { AiPanel } from './ai/AiPanel';
 import { FileNode } from '@/types';
-import { Copy, Scissors, Trash2, Edit2, Info, X, Link as LinkIcon, ExternalLink, Download, Undo2, Redo2 } from 'lucide-react';
+import { Copy, Scissors, Trash2, Edit2, Info, X, Link as LinkIcon, ExternalLink, Download, Undo2, Redo2, Star } from 'lucide-react';
 import { DuplicatePanel } from './features/DuplicatePanel';
 import { TrashPanel } from './features/TrashPanel';
 import { CommandPalette } from './features/CommandPalette';
@@ -22,6 +22,12 @@ import { useFileSuggestions } from '@/hooks/useFileSuggestions';
 import { StorageTreemap } from './storage/StorageTreemap';
 import type { StorageNode } from './storage/StorageTreemap';
 import { BulkActionsBar } from './bulk/BulkActionsBar';
+import { FavoritesBar } from './favorites/FavoritesBar';
+import type { Favorite } from '@/types/features';
+import { FiltersPanel } from './filters/FiltersPanel';
+import type { ExplorerFilters } from './filters/FiltersPanel';
+
+const FAVORITES_STORAGE_KEY = 'favorites';
 
 export function FileExplorer() {
   const {
@@ -51,9 +57,17 @@ export function FileExplorer() {
   const [storageTreeLoading, setStorageTreeLoading] = useState(false);
   const [storageTreeError, setStorageTreeError] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<{ message: string; isError: boolean } | null>(null);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [filters, setFilters] = useState<ExplorerFilters>({
+    type: 'all',
+    size: null,
+    date: null,
+  });
   const { recentFiles, frequentFiles, trackFileOpen } = useFileSuggestions();
 
   const selectedFiles = files.filter(file => selectedIds.has(file.name));
+  const favoritePaths = useMemo(() => new Set(favorites.map((item) => item.path)), [favorites]);
 
   const handleNavigateTo = (path: string, highlight?: string) => {
     if (path === '/agent-runs' || path.startsWith('/agent-runs/')) {
@@ -108,6 +122,76 @@ export function FileExplorer() {
     await deleteItems([file.relativePath]);
     clearSelection();
   };
+
+  const handleShareFeedback = (message: string, isError: boolean = false) => {
+    setShareFeedback({ message, isError });
+  };
+
+  const createAndCopyShareLink = useCallback(async (targetPath: string) => {
+    try {
+      const response = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: targetPath }),
+      });
+
+      const payload = await response.json();
+      if (!payload?.success || !payload?.data?.url) {
+        handleShareFeedback(payload?.error || 'Failed to create share link', true);
+        return;
+      }
+
+      const shareUrl = new URL(payload.data.url, window.location.origin).toString();
+      await navigator.clipboard.writeText(shareUrl);
+      handleShareFeedback('Link copied');
+    } catch {
+      handleShareFeedback('Failed to create share link', true);
+    }
+  }, []);
+
+  const persistFavorites = useCallback((nextFavorites: Favorite[]) => {
+    setFavorites(nextFavorites);
+    try {
+      localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(nextFavorites));
+    } catch {
+      // ignore localStorage write failures
+    }
+  }, []);
+
+  const toggleFavorite = useCallback((file: FileNode) => {
+    const favorite: Favorite = {
+      path: file.relativePath,
+      name: file.name,
+      type: file.type,
+    };
+
+    const alreadyFavorite = favoritePaths.has(file.relativePath);
+    const nextFavorites = alreadyFavorite
+      ? favorites.filter((item) => item.path !== file.relativePath)
+      : [favorite, ...favorites.filter((item) => item.path !== file.relativePath)];
+
+    persistFavorites(nextFavorites);
+    handleShareFeedback(alreadyFavorite ? 'Removed from pinned' : 'Pinned');
+  }, [favoritePaths, favorites, persistFavorites]);
+
+  const removeFavorite = useCallback((targetPath: string) => {
+    const nextFavorites = favorites.filter((item) => item.path !== targetPath);
+    persistFavorites(nextFavorites);
+    handleShareFeedback('Removed from pinned');
+  }, [favorites, persistFavorites]);
+
+  const handleOpenFavorite = useCallback((favorite: Favorite) => {
+    if (favorite.type === 'folder') {
+      handleNavigateTo(favorite.path);
+      return;
+    }
+
+    const folderPath = favorite.path.includes('/')
+      ? favorite.path.slice(0, favorite.path.lastIndexOf('/')) || '/'
+      : '/';
+
+    handleNavigateTo(folderPath, favorite.name);
+  }, []);
 
   const handleBulkMove = async () => {
     if (selectedFiles.length === 0) return;
@@ -216,6 +300,27 @@ export function FileExplorer() {
     return () => window.removeEventListener('click', handleClick);
   }, []);
 
+  useEffect(() => {
+    if (!shareFeedback) return;
+    const timer = window.setTimeout(() => setShareFeedback(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [shareFeedback]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FAVORITES_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Favorite[];
+      if (!Array.isArray(parsed)) return;
+      const cleaned = parsed.filter((item) => (
+        item && typeof item.path === 'string' && typeof item.name === 'string' && (item.type === 'file' || item.type === 'folder')
+      ));
+      setFavorites(cleaned);
+    } catch {
+      // ignore localStorage parse failures
+    }
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const isTypingTarget = (target: EventTarget | null): boolean => {
@@ -314,7 +419,78 @@ export function FileExplorer() {
     }
   };
 
-  const filteredFiles = files.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const applyFilters = useCallback((items: FileNode[], activeFilters: ExplorerFilters): FileNode[] => {
+    const now = new Date();
+    const nowMs = now.getTime();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+    const startOfLast7 = new Date(startOfToday);
+    startOfLast7.setDate(startOfLast7.getDate() - 6); // today + previous 6 days
+
+    const startOfLast30 = new Date(startOfToday);
+    startOfLast30.setDate(startOfLast30.getDate() - 29); // today + previous 29 days
+
+    const MB = 1024 * 1024;
+
+    return items.filter((file) => {
+      const hasAdvancedFilter = activeFilters.type !== 'all' || activeFilters.size !== null || activeFilters.date !== null;
+      if (file.type === 'folder' && hasAdvancedFilter) {
+        return false;
+      }
+
+      if (activeFilters.type !== 'all') {
+        const normalizedType = getFileType(file.name);
+        if (activeFilters.type === 'images' && normalizedType !== 'image') return false;
+        if (activeFilters.type === 'videos' && normalizedType !== 'video') return false;
+        if (activeFilters.type === 'audio' && normalizedType !== 'audio') return false;
+        if (activeFilters.type === 'documents' && !['pdf', 'doc', 'spreadsheet', 'code'].includes(normalizedType)) return false;
+      }
+
+      if (activeFilters.size !== null) {
+        const size = Number(file.size);
+        if (!Number.isFinite(size)) return false;
+
+        if (activeFilters.size === 'lt1mb' && size >= MB) return false;
+        if (activeFilters.size === '1to10mb' && (size < MB || size > 10 * MB)) return false;
+        if (activeFilters.size === 'gt10mb' && size <= 10 * MB) return false;
+      }
+
+      if (activeFilters.date !== null) {
+        const modifiedAt = new Date(file.modifiedDate).getTime();
+        if (Number.isNaN(modifiedAt)) return false;
+
+        if (activeFilters.date === 'today') {
+          if (modifiedAt < startOfToday.getTime() || modifiedAt >= startOfTomorrow.getTime()) return false;
+        }
+
+        if (activeFilters.date === 'last7') {
+          if (modifiedAt < startOfLast7.getTime() || modifiedAt > nowMs) return false;
+        }
+
+        if (activeFilters.date === 'last30') {
+          if (modifiedAt < startOfLast30.getTime() || modifiedAt > nowMs) return false;
+        }
+      }
+
+      return true;
+    });
+  }, []);
+
+  const searchedFiles = useMemo(
+    () => files.filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase())),
+    [files, searchQuery]
+  );
+
+  const filteredFiles = useMemo(
+    () => applyFilters(searchedFiles, filters),
+    [searchedFiles, filters, applyFilters]
+  );
+
+  const hasActiveFilters = filters.type !== 'all' || filters.size !== null || filters.date !== null;
+  const showNoMatchState = files.length > 0 && filteredFiles.length === 0 && (searchQuery.trim().length > 0 || hasActiveFilters);
 
   // Active single selection for the side panel Preview
   const selectedPreviewFile = selectedIds.size === 1 
@@ -403,6 +579,17 @@ export function FileExplorer() {
 
   return (
     <div className="flex h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 overflow-hidden font-sans">
+      {shareFeedback && (
+        <div className="fixed top-4 right-4 z-[60]">
+          <div className={`rounded-lg border px-3 py-2 text-sm shadow-lg ${shareFeedback.isError
+            ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-900/50'
+            : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-900/50'
+          }`}>
+            {shareFeedback.message}
+          </div>
+        </div>
+      )}
+
       <Sidebar 
         storageInfo={storageInfo} 
         isDarkMode={isDarkMode} 
@@ -547,18 +734,32 @@ export function FileExplorer() {
                 )}
               </div>
             ) : (
-              <FileView 
-                files={filteredFiles}
-                viewMode={viewMode}
-                onNavigate={handleNavigateTo}
-                selectedIds={selectedIds}
-                toggleSelection={toggleSelection}
-                onContextMenu={handleContextMenu}
-                highlightedId={highlightedFile}
-                onFileOpen={handleOpenFile}
-                onQuickRename={handleQuickRename}
-                onQuickDelete={handleQuickDelete}
-              />
+              <div className="h-full flex flex-col">
+                <FiltersPanel filters={filters} onChange={setFilters} />
+
+                <FavoritesBar
+                  favorites={favorites}
+                  onOpenFavorite={handleOpenFavorite}
+                  onRemoveFavorite={removeFavorite}
+                />
+
+                <FileView 
+                  files={filteredFiles}
+                  viewMode={viewMode}
+                  onNavigate={handleNavigateTo}
+                  selectedIds={selectedIds}
+                  toggleSelection={toggleSelection}
+                  onContextMenu={handleContextMenu}
+                  highlightedId={highlightedFile}
+                  onFileOpen={handleOpenFile}
+                  onQuickRename={handleQuickRename}
+                  onQuickDelete={handleQuickDelete}
+                  onShare={handleShareFeedback}
+                  favoritePaths={favoritePaths}
+                  onToggleFavorite={toggleFavorite}
+                  emptyMessage={showNoMatchState ? 'No files match filters' : 'This folder is empty'}
+                />
+              </div>
             )}
            </div>
 
@@ -645,8 +846,32 @@ export function FileExplorer() {
                 >
                   <ExternalLink size={14} /> Open With Browser
                 </a>
+                <button
+                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 text-emerald-600 dark:text-emerald-400"
+                  onClick={async () => {
+                    await createAndCopyShareLink(contextMenu.file.relativePath);
+                    setContextMenu(null);
+                  }}
+                >
+                  <LinkIcon size={14} /> Share link
+                </button>
               </>
             )}
+
+            <button
+              className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
+              onClick={() => {
+                toggleFavorite(contextMenu.file);
+                setContextMenu(null);
+              }}
+            >
+              <Star
+                size={14}
+                className={favoritePaths.has(contextMenu.file.relativePath) ? 'text-yellow-500' : ''}
+                fill={favoritePaths.has(contextMenu.file.relativePath) ? 'currentColor' : 'none'}
+              />
+              {favoritePaths.has(contextMenu.file.relativePath) ? 'Unpin' : 'Pin'}
+            </button>
             
             <button 
                className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"

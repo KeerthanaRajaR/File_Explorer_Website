@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import { FileNode } from '@/types';
+import { ShareButton } from '@/components/share/ShareButton';
 import { 
   Folder, File as FileIcon, Image as ImageIcon, FileText, 
-  Archive, FileAudio, FileVideo, FileSpreadsheet, FileCode, Eye, Edit2, Trash2
+  Archive, FileAudio, FileVideo, FileSpreadsheet, FileCode, Eye, Edit2, Trash2, Star
 } from 'lucide-react';
 
 interface FileViewProps {
@@ -18,9 +19,13 @@ interface FileViewProps {
   onFileOpen: (file: FileNode) => void;
   onQuickRename: (file: FileNode) => void;
   onQuickDelete: (file: FileNode) => void;
+  onShare?: (message: string, isError?: boolean) => void;
+  favoritePaths?: Set<string>;
+  onToggleFavorite?: (file: FileNode) => void;
+  emptyMessage?: string;
 }
 
-export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelection, onContextMenu, highlightedId, onFileOpen, onQuickRename, onQuickDelete }: FileViewProps) {
+export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelection, onContextMenu, highlightedId, onFileOpen, onQuickRename, onQuickDelete, onShare, favoritePaths, onToggleFavorite, emptyMessage = 'This folder is empty' }: FileViewProps) {
   
   // Track image load errors to fallback to icon
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
@@ -96,7 +101,7 @@ export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelec
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
         <Folder size={64} className="text-gray-200 dark:text-gray-800 mb-4" />
-        <p>This folder is empty</p>
+        <p>{emptyMessage}</p>
       </div>
     );
   }
@@ -115,6 +120,7 @@ export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelec
           <tbody>
             {files.map(file => {
               const isSelected = selectedIds.has(file.name);
+              const isFavorite = favoritePaths?.has(file.relativePath) ?? false;
               return (
                 <tr 
                   key={file.name}
@@ -147,6 +153,31 @@ export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelec
                        {getIcon(file)}
                     </div>
                     <span className="font-medium text-gray-900 dark:text-gray-100">{file.name}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onToggleFavorite?.(file);
+                      }}
+                      className="ml-1 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      title={isFavorite ? 'Unpin' : 'Pin'}
+                      aria-label={isFavorite ? `Unpin ${file.name}` : `Pin ${file.name}`}
+                    >
+                      <Star
+                        size={14}
+                        className={isFavorite ? 'text-yellow-500' : 'text-gray-400'}
+                        fill={isFavorite ? 'currentColor' : 'none'}
+                      />
+                    </button>
+                    {file.type === 'file' && (
+                      <ShareButton
+                        path={file.relativePath}
+                        onShared={onShare}
+                        className="ml-2 p-1 rounded-md text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        title="Share"
+                      />
+                    )}
                   </td>
                   <td className="py-2">{new Date(file.modifiedDate).toLocaleDateString()}</td>
                   <td className="py-2 text-right pr-4">{file.type === 'folder' ? '--' : formatSize(file.size)}</td>
@@ -164,6 +195,7 @@ export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelec
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
         {files.map(file => {
           const isSelected = selectedIds.has(file.name);
+          const isFavorite = favoritePaths?.has(file.relativePath) ?? false;
           return (
             <div 
               key={file.name}
@@ -199,6 +231,27 @@ export function FileView({ files, viewMode, onNavigate, selectedIds, toggleSelec
               </div>
 
               <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 pointer-events-none group-hover:pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleFavorite?.(file);
+                  }}
+                  className="p-1.5 rounded-md bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-white dark:hover:bg-gray-900 transition-colors"
+                  title={isFavorite ? 'Unpin' : 'Pin'}
+                  aria-label={isFavorite ? `Unpin ${file.name}` : `Pin ${file.name}`}
+                >
+                  <Star size={14} className={isFavorite ? 'text-yellow-500' : 'text-gray-500 dark:text-gray-400'} fill={isFavorite ? 'currentColor' : 'none'} />
+                </button>
+                {file.type === 'file' && (
+                  <ShareButton
+                    path={file.relativePath}
+                    onShared={onShare}
+                    className="p-1.5 rounded-md bg-white/90 dark:bg-gray-900/80 border border-gray-200 dark:border-gray-700 shadow-sm hover:bg-white dark:hover:bg-gray-900 transition-colors text-gray-700 dark:text-gray-300"
+                    title="Share"
+                  />
+                )}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
