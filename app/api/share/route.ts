@@ -8,6 +8,38 @@ type CreateShareRequest = {
   password?: string;
 };
 
+const normalizePublicBaseUrl = (value: string): string | null => {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return `${parsed.origin}`;
+  } catch {
+    return null;
+  }
+};
+
+const getRequestOrigin = (request: NextRequest): string => {
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const host = forwardedHost || request.headers.get('host') || '';
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const protocol = forwardedProto || (request.nextUrl.protocol.replace(':', '') || 'http');
+
+  if (host) {
+    return `${protocol}://${host}`;
+  }
+
+  return request.nextUrl.origin;
+};
+
+const resolveShareBaseUrl = (request: NextRequest): string => {
+  const envBase = normalizePublicBaseUrl(process.env.APP_PUBLIC_URL || '');
+  if (envBase) return envBase;
+  return getRequestOrigin(request);
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as CreateShareRequest;
@@ -34,8 +66,10 @@ export async function POST(request: NextRequest) {
       return createErrorResponse(errorCode, 500);
     }
 
+    const baseUrl = resolveShareBaseUrl(request);
+
     return createSuccessResponse({
-      url: `/share/${result.data.token}`,
+      url: `${baseUrl}/share/${result.data.token}`,
       hasPassword: result.data.hasPassword,
     });
   } catch (error: any) {

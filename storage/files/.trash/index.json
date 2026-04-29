@@ -1,5 +1,23 @@
 [
   {
+    "id": "1777120583901-n7fa1a",
+    "name": "image_compressed.jpeg",
+    "originalPath": "/Pictures/image_compressed.jpeg",
+    "trashedPath": "/Trash/image_compressed.jpeg",
+    "deletedAt": "2026-04-25T12:36:23.901Z",
+    "size": 254663,
+    "type": "file"
+  },
+  {
+    "id": "1777120094051-538g9w",
+    "name": "image_nobg.jpeg",
+    "originalPath": "/Pictures/image_nobg.jpeg",
+    "trashedPath": "/Trash/image_nobg (1).jpeg",
+    "deletedAt": "2026-04-25T12:28:14.051Z",
+    "size": 309854,
+    "type": "file"
+  },
+  {
     "id": "1777038834685-745pkt",
     "name": "video.mp3",
     "originalPath": "/Videos/video.mp3",

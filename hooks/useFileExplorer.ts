@@ -527,7 +527,7 @@ export function useFileExplorer(initialPath: string = '/') {
   };
 
   const removeBackground = async (imagePath: string) => {
-    const res = await fetch('/api/ai/remove-bg', {
+    const res = await fetch('/api/ai/compress-image', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: imagePath })

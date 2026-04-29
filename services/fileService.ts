@@ -1,6 +1,7 @@
 import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
+import sharp from 'sharp';
 import { NextResponse } from 'next/server';
 import { resolveSafePath, getRelativePath, getBaseRoot } from '@/lib/server/pathUtils';
 import { FileNode, StorageInfo } from '@/types';
@@ -533,6 +534,65 @@ export async function removeBackground(targetPath: string) {
     });
   } catch (err) {
     return fail('AI_FAILED');
+  }
+}
+
+type SupportedCompressionExt = '.jpg' | '.jpeg' | '.png' | '.webp';
+
+const SUPPORTED_COMPRESSION_EXTENSIONS = new Set<SupportedCompressionExt>(['.jpg', '.jpeg', '.png', '.webp']);
+
+/**
+ * Creates a compressed copy next to the source image.
+ * Example: /photos/cat.jpg -> /photos/cat_compressed.jpg
+ */
+export async function compressImage(targetPath: string, quality: number = 72) {
+  const absolutePath = resolveSafePath(targetPath);
+  if (!absolutePath) return fail('INVALID_PATH');
+  if (!fs.existsSync(absolutePath)) return fail('FILE_NOT_FOUND');
+
+  const ext = path.extname(absolutePath).toLowerCase() as SupportedCompressionExt;
+  if (!SUPPORTED_COMPRESSION_EXTENSIONS.has(ext)) {
+    return fail('UNSUPPORTED_IMAGE_TYPE');
+  }
+
+  const normalizedQuality = Math.max(1, Math.min(100, Number.isFinite(quality) ? quality : 72));
+  const nameWithoutExt = path.basename(absolutePath, ext);
+  const dirName = path.dirname(absolutePath);
+  const compressedAbsolutePath = path.join(dirName, `${nameWithoutExt}_compressed${ext}`);
+
+  try {
+    const sourceBuffer = await fsp.readFile(absolutePath);
+    let pipeline = sharp(sourceBuffer, { failOn: 'none' });
+
+    if (ext === '.jpg' || ext === '.jpeg') {
+      pipeline = pipeline.jpeg({ quality: normalizedQuality, mozjpeg: true, progressive: true });
+    } else if (ext === '.png') {
+      pipeline = pipeline.png({ quality: normalizedQuality, compressionLevel: 9, palette: true, effort: 10 });
+    } else if (ext === '.webp') {
+      pipeline = pipeline.webp({ quality: normalizedQuality, effort: 6 });
+    }
+
+    await pipeline.toFile(compressedAbsolutePath);
+
+    const [originalStats, compressedStats] = await Promise.all([
+      fsp.stat(absolutePath),
+      fsp.stat(compressedAbsolutePath),
+    ]);
+
+    return succeed({
+      message: 'Image compressed successfully',
+      originalFile: getRelativePath(absolutePath),
+      compressedFile: getRelativePath(compressedAbsolutePath),
+      originalBytes: originalStats.size,
+      compressedBytes: compressedStats.size,
+      reductionBytes: Math.max(0, originalStats.size - compressedStats.size),
+      reductionPercent: originalStats.size > 0
+        ? Number((((originalStats.size - compressedStats.size) / originalStats.size) * 100).toFixed(2))
+        : 0,
+      quality: normalizedQuality,
+    });
+  } catch (err) {
+    return fail('IMAGE_COMPRESSION_FAILED');
   }
 }
 

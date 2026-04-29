@@ -25,7 +25,12 @@ A production-grade, secure, scalable file explorer web application built with **
    ```env
    FILE_EXPLORER_ROOT=./storage/files
    STORAGE_QUOTA=5368709120  # (5GB Defaults)
+   APP_PUBLIC_URL=https://your-domain.example.com
    ```
+
+   Notes:
+   - `APP_PUBLIC_URL` should be your public base URL (no trailing path).
+   - In local development, if this is not set, share links fall back to the request origin (e.g., `http://localhost:3000`).
 3. **Seed mock data (optional):**
    ```bash
    npm run seed

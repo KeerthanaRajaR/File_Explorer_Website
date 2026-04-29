@@ -26,8 +26,20 @@ import { FavoritesBar } from './favorites/FavoritesBar';
 import type { Favorite } from '@/types/features';
 import { FiltersPanel } from './filters/FiltersPanel';
 import type { ExplorerFilters } from './filters/FiltersPanel';
+import { InputDialog } from './dialogs/InputDialog';
+import { ShareTargetsDialog } from './share/ShareTargetsDialog';
 
 const FAVORITES_STORAGE_KEY = 'favorites';
+
+type InputDialogConfig = {
+  title: string;
+  message?: string;
+  placeholder?: string;
+  defaultValue?: string;
+  submitLabel?: string;
+  cancelLabel?: string;
+  onSubmit: (value: string) => void | Promise<void>;
+};
 
 export function FileExplorer() {
   const {
@@ -58,7 +70,9 @@ export function FileExplorer() {
   const [storageTreeError, setStorageTreeError] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [shareFeedback, setShareFeedback] = useState<{ message: string; isError: boolean } | null>(null);
+  const [shareDialogPath, setShareDialogPath] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [inputDialog, setInputDialog] = useState<InputDialogConfig | null>(null);
   const [filters, setFilters] = useState<ExplorerFilters>({
     type: 'all',
     size: null,
@@ -68,6 +82,14 @@ export function FileExplorer() {
 
   const selectedFiles = files.filter(file => selectedIds.has(file.name));
   const favoritePaths = useMemo(() => new Set(favorites.map((item) => item.path)), [favorites]);
+
+  const openInputDialog = useCallback((config: InputDialogConfig) => {
+    setInputDialog(config);
+  }, []);
+
+  const closeInputDialog = useCallback(() => {
+    setInputDialog(null);
+  }, []);
 
   const handleNavigateTo = (path: string, highlight?: string) => {
     if (path === '/agent-runs' || path.startsWith('/agent-runs/')) {
@@ -111,10 +133,17 @@ export function FileExplorer() {
     }
   };
 
-  const handleQuickRename = async (file: FileNode) => {
-    const newName = prompt('Enter new name:', file.name);
-    if (!newName || newName === file.name) return;
-    await rename(file.relativePath, newName);
+  const handleQuickRename = (file: FileNode) => {
+    openInputDialog({
+      title: 'Rename file',
+      message: `Enter a new name for "${file.name}"`,
+      defaultValue: file.name,
+      submitLabel: 'Rename',
+      onSubmit: async (newName) => {
+        if (!newName || newName === file.name) return;
+        await rename(file.relativePath, newName);
+      },
+    });
   };
 
   const handleQuickDelete = async (file: FileNode) => {
@@ -126,28 +155,6 @@ export function FileExplorer() {
   const handleShareFeedback = (message: string, isError: boolean = false) => {
     setShareFeedback({ message, isError });
   };
-
-  const createAndCopyShareLink = useCallback(async (targetPath: string) => {
-    try {
-      const response = await fetch('/api/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: targetPath }),
-      });
-
-      const payload = await response.json();
-      if (!payload?.success || !payload?.data?.url) {
-        handleShareFeedback(payload?.error || 'Failed to create share link', true);
-        return;
-      }
-
-      const shareUrl = new URL(payload.data.url, window.location.origin).toString();
-      await navigator.clipboard.writeText(shareUrl);
-      handleShareFeedback('Link copied');
-    } catch {
-      handleShareFeedback('Failed to create share link', true);
-    }
-  }, []);
 
   const persistFavorites = useCallback((nextFavorites: Favorite[]) => {
     setFavorites(nextFavorites);
@@ -193,29 +200,35 @@ export function FileExplorer() {
     handleNavigateTo(folderPath, favorite.name);
   }, []);
 
-  const handleBulkMove = async () => {
+  const handleBulkMove = () => {
     if (selectedFiles.length === 0) return;
-    const destination = prompt('Move selected items to path:', currentPath);
-    if (!destination) return;
-
-    const sourcePaths = selectedFiles.map(file => file.relativePath);
-    setBulkBusy(true);
-    try {
-      const res = await fetch('/api/paste', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourcePaths, destinationPath: destination, action: 'cut' }),
-      });
-      const data = await res.json();
-      if (!data?.success) {
-        alert(data?.error || 'Failed to move selected items');
-      } else {
-        clearSelection();
-        await refreshAll();
-      }
-    } finally {
-      setBulkBusy(false);
-    }
+    openInputDialog({
+      title: 'Move selected items',
+      message: `Move ${selectedFiles.length} selected item(s) to path:`,
+      defaultValue: currentPath,
+      placeholder: '/target/path',
+      submitLabel: 'Move',
+      onSubmit: async (destination) => {
+        const sourcePaths = selectedFiles.map(file => file.relativePath);
+        setBulkBusy(true);
+        try {
+          const res = await fetch('/api/paste', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sourcePaths, destinationPath: destination, action: 'cut' }),
+          });
+          const data = await res.json();
+          if (!data?.success) {
+            alert(data?.error || 'Failed to move selected items');
+          } else {
+            clearSelection();
+            await refreshAll();
+          }
+        } finally {
+          setBulkBusy(false);
+        }
+      },
+    });
   };
 
   const handleBulkDelete = async () => {
@@ -247,39 +260,45 @@ export function FileExplorer() {
     }
   };
 
-  const handleBulkMergePdfs = async () => {
+  const handleBulkMergePdfs = () => {
     if (selectedFiles.length < 2) {
       alert('Select at least 2 PDF files to merge.');
       return;
     }
 
-    const outputName = prompt('Merged PDF name:', 'merged.pdf');
-    if (!outputName) return;
+    openInputDialog({
+      title: 'Merge PDFs',
+      message: 'Enter output PDF name:',
+      defaultValue: 'merged.pdf',
+      placeholder: 'merged.pdf',
+      submitLabel: 'Merge',
+      onSubmit: async (outputName) => {
+        setBulkBusy(true);
+        try {
+          const sourcePaths = selectedFiles
+            .filter(file => file.type === 'file')
+            .map(file => file.relativePath);
 
-    setBulkBusy(true);
-    try {
-      const sourcePaths = selectedFiles
-        .filter(file => file.type === 'file')
-        .map(file => file.relativePath);
+          const res = await fetch('/api/merge-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sourcePaths, destinationPath: currentPath, outputName }),
+          });
 
-      const res = await fetch('/api/merge-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourcePaths, destinationPath: currentPath, outputName }),
-      });
+          const data = await res.json();
+          if (!data?.success) {
+            alert(data?.error || 'Failed to merge selected PDFs');
+            return;
+          }
 
-      const data = await res.json();
-      if (!data?.success) {
-        alert(data?.error || 'Failed to merge selected PDFs');
-        return;
-      }
-
-      clearSelection();
-      await refreshAll();
-      alert(`Merged PDF created: ${data?.data?.outputName || outputName}`);
-    } finally {
-      setBulkBusy(false);
-    }
+          clearSelection();
+          await refreshAll();
+          alert(`Merged PDF created: ${data?.data?.outputName || outputName}`);
+        } finally {
+          setBulkBusy(false);
+        }
+      },
+    });
   };
 
   // Apply dark mode
@@ -406,9 +425,16 @@ export function FileExplorer() {
     setContextMenu({ x: e.clientX, y: e.clientY, file });
   };
 
-  const handleCreateFolder = async () => {
-    const name = prompt('New Folder Name:');
-    if (name) await createFolder(name);
+  const handleCreateFolder = () => {
+    openInputDialog({
+      title: 'Create folder',
+      message: 'Enter folder name:',
+      placeholder: 'New folder',
+      submitLabel: 'Create',
+      onSubmit: async (name) => {
+        await createFolder(name);
+      },
+    });
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -542,14 +568,29 @@ export function FileExplorer() {
         if (selectedIds.size === 1) {
           const file = files.find(f => f.name === Array.from(selectedIds)[0]);
           if (file) {
-            const newName = prompt('Enter new name:', file.name);
-            if (newName) await rename(file.relativePath, newName);
+            openInputDialog({
+              title: 'Rename item',
+              message: `Enter new name for "${file.name}"`,
+              defaultValue: file.name,
+              submitLabel: 'Rename',
+              onSubmit: async (newName) => {
+                await rename(file.relativePath, newName);
+              },
+            });
           }
         }
         break;
       case 'goto':
-        const targetPath = prompt('Enter path to navigate to:', currentPath);
-        if (targetPath) navigateTo(targetPath || '/');
+        openInputDialog({
+          title: 'Go to path',
+          message: 'Enter path to navigate to:',
+          defaultValue: currentPath,
+          placeholder: '/path',
+          submitLabel: 'Go',
+          onSubmit: async (targetPath) => {
+            navigateTo(targetPath || '/');
+          },
+        });
         break;
       case 'undo':
         await undo();
@@ -575,7 +616,7 @@ export function FileExplorer() {
       default:
         console.warn('Unknown action:', action);
     }
-  }, [selectedIds, files, currentPath, handleCreateFolder, deleteItems, clearSelection, rename, navigateTo, undo, redo, refreshAll]);
+  }, [selectedIds, files, currentPath, handleCreateFolder, deleteItems, clearSelection, rename, navigateTo, undo, redo, refreshAll, openInputDialog]);
 
   return (
     <div className="flex h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100 overflow-hidden font-sans">
@@ -848,12 +889,12 @@ export function FileExplorer() {
                 </a>
                 <button
                   className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2 text-emerald-600 dark:text-emerald-400"
-                  onClick={async () => {
-                    await createAndCopyShareLink(contextMenu.file.relativePath);
+                  onClick={() => {
+                    setShareDialogPath(contextMenu.file.relativePath);
                     setContextMenu(null);
                   }}
                 >
-                  <LinkIcon size={14} /> Share link
+                  <LinkIcon size={14} /> Share
                 </button>
               </>
             )}
@@ -935,9 +976,16 @@ export function FileExplorer() {
             )}
             <button 
               className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-2"
-              onClick={async () => {
-                const newName = prompt('Enter new name:', contextMenu.file.name);
-                if (newName) await rename(contextMenu.file.relativePath, newName);
+              onClick={() => {
+                openInputDialog({
+                  title: 'Rename item',
+                  message: `Enter new name for "${contextMenu.file.name}"`,
+                  defaultValue: contextMenu.file.name,
+                  submitLabel: 'Rename',
+                  onSubmit: async (newName) => {
+                    await rename(contextMenu.file.relativePath, newName);
+                  },
+                });
                 setContextMenu(null);
               }}
             >
@@ -1044,6 +1092,28 @@ export function FileExplorer() {
           onAction={handlePaletteAction}
           currentPath={currentPath}
           selectedCount={selectedIds.size}
+        />
+
+        <InputDialog
+          isOpen={!!inputDialog}
+          title={inputDialog?.title || ''}
+          message={inputDialog?.message}
+          placeholder={inputDialog?.placeholder}
+          defaultValue={inputDialog?.defaultValue}
+          submitLabel={inputDialog?.submitLabel}
+          cancelLabel={inputDialog?.cancelLabel}
+          onClose={closeInputDialog}
+          onSubmit={async (value) => {
+            if (!inputDialog) return;
+            await inputDialog.onSubmit(value);
+          }}
+        />
+
+        <ShareTargetsDialog
+          isOpen={!!shareDialogPath}
+          path={shareDialogPath}
+          onClose={() => setShareDialogPath(null)}
+          onShared={handleShareFeedback}
         />
 
         {/* Media Viewers */}
