@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     // Return actual file content stream or buffer, handled by service
     return result.data as NextResponse;
   } catch (error: any) {
-    return createErrorResponse(error.message || 'Internal Server Error', 500);
+    console.error('API /api/file Error:', error);
+    return createErrorResponse('INTERNAL_SERVER_ERROR', 500);
   }
 }

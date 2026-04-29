@@ -7,7 +7,8 @@ export async function GET() {
     const entries = await listTrashEntries();
     return createSuccessResponse(entries);
   } catch (error: any) {
-    return createErrorResponse(error.message || 'Internal Server Error', 500);
+    console.error('API /api/trash Error:', error);
+    return createErrorResponse('INTERNAL_SERVER_ERROR', 500);
   }
 }
 
@@ -24,6 +25,7 @@ export async function DELETE(request: NextRequest) {
     await permanentlyDeleteTrashEntry(trashId);
     return createSuccessResponse(true);
   } catch (error: any) {
-    return createErrorResponse(error.message || 'Internal Server Error', 500);
+    console.error('API /api/trash DELETE Error:', error);
+    return createErrorResponse('INTERNAL_SERVER_ERROR', 500);
   }
 }

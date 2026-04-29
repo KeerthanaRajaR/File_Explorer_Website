@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
     const restored = await restoreTrashEntry(trashId);
     return createSuccessResponse(restored);
   } catch (error: any) {
-    return createErrorResponse(error.message || 'Internal Server Error', 500);
+    console.error('API /api/trash/restore Error:', error);
+    return createErrorResponse('INTERNAL_SERVER_ERROR', 500);
   }
 }

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       fileName: result.fileName,
     });
   } catch (error: any) {
-    const message = error.message || 'Internal Server Error';
+    const message = error.message || 'INTERNAL_SERVER_ERROR';
     if (
       message === 'INVALID_PATH' ||
       message === 'PATH_IS_DIRECTORY' ||
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     ) {
       return createErrorResponse(message, 400);
     }
-    return createErrorResponse(message, 500);
+    console.error('API /api/ai/summarize Error:', error);
+    return createErrorResponse('INTERNAL_SERVER_ERROR', 500);
   }
 }

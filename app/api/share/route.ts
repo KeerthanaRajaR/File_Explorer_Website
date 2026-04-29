@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
       hasPassword: result.data.hasPassword,
     });
   } catch (error: any) {
-    return createErrorResponse(error?.message || 'Internal Server Error', 500);
+    console.error('API /api/share Error:', error);
+    return createErrorResponse('INTERNAL_SERVER_ERROR', 500);
   }
 }

@@ -7,6 +7,7 @@ export async function GET(request: NextRequest) {
     const result = await getDuplicateGroups();
     return createSuccessResponse(result);
   } catch (error: any) {
-    return createErrorResponse(error.message || 'Internal Server Error', 500);
+    console.error('API /api/duplicates Error:', error);
+    return createErrorResponse('INTERNAL_SERVER_ERROR', 500);
   }
 }

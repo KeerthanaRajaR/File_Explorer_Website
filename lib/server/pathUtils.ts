@@ -1,11 +1,32 @@
+import fs from 'fs';
 import path from 'path';
 
 /**
  * Returns the absolute path of the root storage directory.
  */
 export const getBaseRoot = (): string => {
-  const envRoot = process.env.FILE_EXPLORER_ROOT || './storage/files';
-  return path.resolve(process.cwd(), envRoot);
+  const envRoot = process.env.FILE_EXPLORER_ROOT && process.env.FILE_EXPLORER_ROOT.trim()
+    ? process.env.FILE_EXPLORER_ROOT.trim()
+    : undefined;
+
+  // Default behavior:
+  // - If FILE_EXPLORER_ROOT is set, use it.
+  // - If not set and running in production, use a writable temporary directory (/tmp/storage/files)
+  //   so serverless environments (Vercel/Lambdas) don't crash when no repo files exist.
+  // - Otherwise (local dev), use ./storage/files relative to project root.
+  const defaultRoot = (process.env.NODE_ENV === 'production' ? path.resolve('/tmp', 'storage', 'files') : path.resolve(process.cwd(), './storage/files'));
+  const resolved = path.resolve(process.cwd(), envRoot || defaultRoot);
+
+  // Ensure the directory exists so APIs that call into the FS don't immediately ENOENT.
+  try {
+    if (!fs.existsSync(resolved)) {
+      fs.mkdirSync(resolved, { recursive: true });
+    }
+  } catch (e) {
+    // If we can't create the folder, bail silently — callers will surface an appropriate error.
+  }
+
+  return resolved;
 };
 
 /**

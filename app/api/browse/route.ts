@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     
     return createSuccessResponse(result.data);
   } catch (error: any) {
-    return createErrorResponse(error.message || 'Internal Server Error', 500);
+    console.error('API /api/browse Error:', error);
+    return createErrorResponse('INTERNAL_SERVER_ERROR', 500);
   }
 }
