@@ -1,5 +1,6 @@
 import fsp from 'fs/promises';
 import path from 'path';
+import { getWritableRuntimeDir } from '@/lib/server/runtimePaths';
 import crypto from 'crypto';
 
 export type ShareLink = {
@@ -15,7 +16,7 @@ const hashPassword = (password: string): string => {
   return crypto.createHash('sha256').update(password).digest('hex');
 };
 
-const SHARE_LINKS_FILE = path.join(process.cwd(), 'storage', 'ai', 'shareLinks.json');
+const SHARE_LINKS_FILE = path.join(getWritableRuntimeDir(['storage', 'ai']), 'shareLinks.json');
 
 const isValidDateString = (value: string): boolean => !Number.isNaN(new Date(value).getTime());
 

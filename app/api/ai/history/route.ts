@@ -58,6 +58,27 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  // Temporarily disabled to aid debugging of other API routes.
-  return createSuccessResponse({ saved: false, message: 'AI history temporarily disabled for debugging' });
+  try {
+    try {
+      console.log('AI history POST - history file:', getHistoryFilePath());
+    } catch (e) {
+      console.error('AI history POST - runtime-path debug failed:', e);
+    }
+
+    const body = await request.json() as { messages?: unknown };
+    const messages = Array.isArray(body?.messages)
+      ? (body.messages as unknown[]).filter(isValidMessage).slice(-MAX_MESSAGES)
+      : [];
+
+    try {
+      await writeHistory(messages);
+      return createSuccessResponse({ saved: true, count: messages.length });
+    } catch (e) {
+      console.error('AI history write failed:', e);
+      return createSuccessResponse({ saved: false, message: 'Failed to persist chat history' });
+    }
+  } catch (error: any) {
+    console.error('API /api/ai/history Error:', error);
+    return createErrorResponse('FAILED_TO_SAVE_CHAT_HISTORY', 500);
+  }
 }
