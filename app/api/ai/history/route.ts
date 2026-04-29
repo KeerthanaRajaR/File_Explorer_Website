@@ -58,23 +58,6 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  try {
-    try {
-      console.log('AI history POST - GROQ_API_KEY present:', !!process.env.GROQ_API_KEY);
-      console.log('AI history POST - GROQ_API_KEY sample:', process.env.GROQ_API_KEY ? mask(process.env.GROQ_API_KEY) : 'undefined');
-      console.log('AI history POST - history file:', getHistoryFilePath());
-    } catch (e) {
-      console.error('AI history POST - runtime-path debug failed:', e);
-    }
-    const body = await request.json() as { messages?: unknown };
-    const messages = Array.isArray(body?.messages)
-      ? (body.messages as unknown[]).filter(isValidMessage).slice(-MAX_MESSAGES)
-      : [];
-
-    await writeHistory(messages);
-    return createSuccessResponse({ saved: true, count: messages.length });
-  } catch (error: any) {
-    console.error('API /api/ai/history Error:', error);
-    return createErrorResponse('FAILED_TO_SAVE_CHAT_HISTORY', 500);
-  }
+  // Temporarily disabled to aid debugging of other API routes.
+  return createSuccessResponse({ saved: false, message: 'AI history temporarily disabled for debugging' });
 }
