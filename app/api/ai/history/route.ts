@@ -2,6 +2,7 @@ import fsp from 'fs/promises';
 import path from 'path';
 import { NextRequest } from 'next/server';
 import { createErrorResponse, createSuccessResponse } from '@/lib/server/apiWrapper';
+import { getWritableRuntimeDir } from '@/lib/server/runtimePaths';
 
 type PersistedMessage = {
   id: string;
@@ -12,7 +13,10 @@ type PersistedMessage = {
 };
 
 const MAX_MESSAGES = 150;
-const getHistoryFilePath = (): string => path.join(process.cwd(), 'storage', 'ai', 'chatHistory.json');
+const getHistoryFilePath = (): string => path.join(getWritableRuntimeDir(['storage', 'ai']), 'chatHistory.json');
+
+// Debugging helper (do not run at module import time)
+const mask = (v?: string) => (v && v.length > 8 ? `${v.slice(0,4)}...${v.slice(-4)}` : (v || 'undefined'));
 
 const isValidMessage = (item: unknown): item is PersistedMessage => {
   if (!item || typeof item !== 'object') return false;
@@ -39,6 +43,13 @@ const writeHistory = async (messages: PersistedMessage[]): Promise<void> => {
 
 export async function GET() {
   try {
+    try {
+      console.log('AI history GET - GROQ_API_KEY present:', !!process.env.GROQ_API_KEY);
+      console.log('AI history GET - GROQ_API_KEY sample:', process.env.GROQ_API_KEY ? mask(process.env.GROQ_API_KEY) : 'undefined');
+      console.log('AI history GET - history file:', getHistoryFilePath());
+    } catch (e) {
+      console.error('AI history GET - runtime-path debug failed:', e);
+    }
     const messages = await readHistory();
     return createSuccessResponse(messages);
   } catch {
@@ -48,6 +59,13 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    try {
+      console.log('AI history POST - GROQ_API_KEY present:', !!process.env.GROQ_API_KEY);
+      console.log('AI history POST - GROQ_API_KEY sample:', process.env.GROQ_API_KEY ? mask(process.env.GROQ_API_KEY) : 'undefined');
+      console.log('AI history POST - history file:', getHistoryFilePath());
+    } catch (e) {
+      console.error('AI history POST - runtime-path debug failed:', e);
+    }
     const body = await request.json() as { messages?: unknown };
     const messages = Array.isArray(body?.messages)
       ? (body.messages as unknown[]).filter(isValidMessage).slice(-MAX_MESSAGES)
@@ -56,6 +74,7 @@ export async function POST(request: NextRequest) {
     await writeHistory(messages);
     return createSuccessResponse({ saved: true, count: messages.length });
   } catch (error: any) {
-    return createErrorResponse(error?.message || 'FAILED_TO_SAVE_CHAT_HISTORY', 500);
+    console.error('API /api/ai/history Error:', error);
+    return createErrorResponse('FAILED_TO_SAVE_CHAT_HISTORY', 500);
   }
 }

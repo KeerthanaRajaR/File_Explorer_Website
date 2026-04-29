@@ -1,6 +1,7 @@
 import fsp from 'fs/promises';
 import path from 'path';
 import { ActionPayload } from '@/types/ai';
+import { getWritableRuntimeDir } from '@/lib/server/runtimePaths';
 
 export type ActionAuditEvent = {
   action: ActionPayload;
@@ -10,7 +11,7 @@ export type ActionAuditEvent = {
 };
 
 const getAuditLogPath = (): string => {
-  return path.resolve(process.cwd(), './storage/ai/actions.log');
+  return path.join(getWritableRuntimeDir(['storage', 'ai']), 'actions.log');
 };
 
 export async function appendActionAudit(event: ActionAuditEvent): Promise<void> {

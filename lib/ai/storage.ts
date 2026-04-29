@@ -2,8 +2,9 @@ import fsp from 'fs/promises';
 import fs from 'fs';
 import path from 'path';
 import { StoredFileMeta, FileMeta } from '@/types/ai';
+import { getWritableRuntimeDir } from '@/lib/server/runtimePaths';
 
-const STORAGE_DIR = path.join(process.cwd(), 'storage', 'ai');
+const STORAGE_DIR = getWritableRuntimeDir(['storage', 'ai']);
 const STORAGE_FILE = path.join(STORAGE_DIR, 'embeddings.json');
 
 /**
